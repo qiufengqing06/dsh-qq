@@ -1,0 +1,27 @@
+name: CI
+
+# 零依赖项目：不需要 install，直接跑 node --test（Node 22+ 内置测试运行器）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    name: node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # 可选依赖（ws / https-proxy-agent / undici）缺席也能全绿：这里刻意不安装任何依赖
+      - name: 语法检查（发布白名单内的文件）
+        run: |
+          for file in $(git ls-files 'lib/*.js'); do node --check "$file"; done
+      - name: 全量测试
+        run: node --test test/*.test.js

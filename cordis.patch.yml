@@ -1,0 +1,7 @@
+# dsh-qq bundle patch：向 profile 插件名册插入宿主行。
+# 安装：dsh plugin --profile <name> add <本目录>
+# 注意：插件行 id 全局唯一，重复插入会让 loader 崩溃——不要在 profile 自己的
+# cordis.patch.yml 里再次插入这一行。
+- insert:
+    - id: dsh-qq
+      name: 'dsh-qq'

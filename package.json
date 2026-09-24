@@ -1,0 +1,46 @@
+{
+  "name": "dsh-qq",
+  "version": "0.3.0",
+  "description": "QQ 渠道插件：QQ 号扫码/QQBot 凭据登录，QQ ↔ DSH 会话双向消息、远程控制与审批（de_channel_send channels=qq）",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./mock": "./lib/mock.js",
+    "./transport": "./lib/transport.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "NOTICE.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "qq",
+    "qqbot",
+    "channel",
+    "plugin",
+    "qq-bot"
+  ],
+  "license": "MIT",
+  "optionalDependencies": {
+    "https-proxy-agent": "^7.0.0",
+    "undici": "^7.0.0",
+    "ws": "^8.18.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

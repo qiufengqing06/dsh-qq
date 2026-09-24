@@ -1,0 +1,26 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 临时与产物
+*.log
+*.tgz
+.tmp/
+tmp/
+coverage/
+dist/
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 内部执行/设计文档（仅本地保留，不入库）
+执行文档.md
+执行文档-*.md
+
+# 意外产物：本机其他程序若以本目录为工作目录，会在这里写入自己的运行库，必须挡住
+*.db
+*.db-wal
+*.db-shm

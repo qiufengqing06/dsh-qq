@@ -18,9 +18,24 @@ import { createFakeAgents } from './helpers/fake-ctx.js'
  * cordis 不在本包依赖里（DSH 插件运行时由宿主提供），因此按 DSH 检出位置动态定位；
  * 找不到时跳过，不阻塞纯离线环境。
  */
-const CORDIS_ENTRY =
-  process.env.DSH_CORDIS_ENTRY ?? '/home/qiufengqing/deepseek-harness/vendor/cordis/lib/index.js'
-const HAS_CORDIS = existsSync(CORDIS_ENTRY)
+/**
+ * 定位 cordis：优先环境变量，其次从常见 DSH 检出位置猜（含本仓库的兄弟目录），
+ * 都没有就跳过。**不写死开发机的绝对路径**——那既泄漏本机结构，换台机器也跑不了。
+ */
+function resolveCordisEntry() {
+  const candidates = []
+  if (process.env.DSH_CORDIS_ENTRY) candidates.push(process.env.DSH_CORDIS_ENTRY)
+  const harnessRoots = [process.env.DSH_CHECKOUT, process.env.DSH_HOME, process.cwd()]
+  for (const root of harnessRoots) {
+    if (typeof root === 'string' && root !== '') {
+      candidates.push(join(root, 'vendor/cordis/lib/index.js'))
+      candidates.push(join(root, '..', 'deepseek-harness/vendor/cordis/lib/index.js'))
+    }
+  }
+  return candidates.find(candidate => existsSync(candidate)) ?? candidates[0] ?? ''
+}
+const CORDIS_ENTRY = resolveCordisEntry()
+const HAS_CORDIS = CORDIS_ENTRY !== '' && existsSync(CORDIS_ENTRY)
 
 test('真实 cordis：插件能装配、注册命令与渠道条目、卸载后清理干净', async t => {
   if (!HAS_CORDIS) return t.skip(`未找到 cordis：${CORDIS_ENTRY}`)

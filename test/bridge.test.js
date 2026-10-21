@@ -9,7 +9,7 @@ import { createStore } from '../lib/store.js'
 import { createMockTransport } from '../lib/mock.js'
 import { createGroupMemory } from '../lib/group-memory.js'
 import { createResourceScope } from '../lib/scope.js'
-import { createBridge, extractAssistantText, extractTurnError, lastEventSeq, stripDshUiFences, toPlainText } from '../lib/bridge.js'
+import { createBridge, dshUiFencesToText, extractAssistantText, extractTurnError, lastEventSeq, stripDshUiFences, toPlainText } from '../lib/bridge.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
 const tick = (ms = 15) => new Promise(resolve => setTimeout(resolve, ms))
@@ -995,24 +995,61 @@ test('stripDshUiFences：多段围栏、围栏在中间、只有围栏', () => {
   assert.equal(stripDshUiFences('没有围栏'), '没有围栏')
 })
 
-test('Markdown 渠道：整条回复只有卡片时如实说明，不静默发空消息', async () => {
+test('Markdown 渠道：只有卡片时把卡片内容摘成文字版发出去', async () => {
   const { bridge, transport, agents } = await setup({}, {}, { capabilities: { markdown: true } })
   await bridge.handleUserMessage(transport.injectText('ping'))
   const agent = agents.live.get(agents.created[0].sessionId)
-  agent.reply('```dsh-ui\n{"title":"只有卡片"}\n```')
+  agent.reply('```dsh-ui\n{"title":"评审结论","items":[{"type":"callout","title":"建议","content":"Major Revision"},{"type":"table","columns":["维度","分数"],"rows":[["证据","2 / 5"]]}]}\n```')
+  agent.ctx.emitStatus('idle')
+  await tick()
+  const sent = transport.lastText()
+  assert.match(sent, /评审结论/)
+  assert.match(sent, /Major Revision/)
+  assert.match(sent, /证据 ｜ 2 \/ 5/, '表格要转成可读的竖线分隔文本')
+  assert.equal(sent.includes('dsh-ui'), false)
+})
+
+test('只有无法解析的卡片围栏时，回一句可读说明而不是空消息/JSON', async () => {
+  const { bridge, transport, agents } = await setup({}, {}, { capabilities: { markdown: true } })
+  await bridge.handleUserMessage(transport.injectText('ping'))
+  const agent = agents.live.get(agents.created[0].sessionId)
+  agent.reply('```dsh-ui\n{不是合法 JSON}\n```')
   agent.ctx.emitStatus('idle')
   await tick()
   assert.match(transport.lastText(), /只有卡片内容/)
 })
 
-test('纯文本渠道：整条回复只有卡片时如实说明，不静默发空消息', async () => {
+test('dshUiFencesToText：callout / 表格 / 步骤 / 列表转文字', () => {
+  const spec = {
+    title: '总览',
+    items: [
+      { type: 'callout', title: '结论', content: '可以成立' },
+      { type: 'table', columns: ['A', 'B'], rows: [['1', '2']] },
+      { type: 'steps', steps: [{ title: '第一步', desc: '先跑基线' }, { title: '第二步' }] },
+      { type: 'list', items: ['要点一', '要点二'] },
+    ],
+  }
+  const text = dshUiFencesToText('```dsh-ui\n' + JSON.stringify(spec) + '\n```')
+  assert.match(text, /总览/)
+  assert.match(text, /结论/)
+  assert.match(text, /可以成立/)
+  assert.match(text, /A ｜ B/)
+  assert.match(text, /1 ｜ 2/)
+  assert.match(text, /第一步：先跑基线/)
+  assert.match(text, /2\. 第二步/)
+  assert.match(text, /• 要点一/)
+})
+
+test('纯文本渠道：只有卡片时同样发文字版（不静默发空消息）', async () => {
   const { bridge, transport, agents } = await setup({}, {}, { capabilities: { markdown: false } })
   await bridge.handleUserMessage(transport.injectText('ping'))
   const agent = agents.live.get(agents.created[0].sessionId)
-  agent.reply('```dsh-ui\n{"title":"只有卡片"}\n```')
+  agent.reply('```dsh-ui\n{"title":"结论","items":[{"type":"callout","content":"没删干净"}]}\n```')
   agent.ctx.emitStatus('idle')
   await tick()
-  assert.match(transport.lastText(), /只有卡片内容/)
+  const sent = transport.lastText()
+  assert.match(sent, /没删干净/)
+  assert.equal(sent.includes('dsh-ui'), false)
 })
 
 // ── 群记忆：长期笔记 + 「上次之后」的群消息注入（零额外 LLM 调用） ──

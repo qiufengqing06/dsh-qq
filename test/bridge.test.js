@@ -9,7 +9,7 @@ import { createStore } from '../lib/store.js'
 import { createMockTransport } from '../lib/mock.js'
 import { createGroupMemory } from '../lib/group-memory.js'
 import { createResourceScope } from '../lib/scope.js'
-import { createBridge, extractAssistantText, extractTurnError, lastEventSeq, toPlainText } from '../lib/bridge.js'
+import { createBridge, extractAssistantText, extractTurnError, lastEventSeq, stripDshUiFences, toPlainText } from '../lib/bridge.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
 const tick = (ms = 15) => new Promise(resolve => setTimeout(resolve, ms))
@@ -967,17 +967,42 @@ test('无 Markdown 能力的渠道：回复自动纯文本化并带上渠道提�
   assert.match(sent, /说明（https:\/\/example\.com）/)
 })
 
-test('有 Markdown 能力的渠道（官方 QQBot）：原样发送，不加提示也不降级', async () => {
+test('有 Markdown 能力的渠道（官方 QQBot）：Markdown 原样发送，但 dsh-ui 围栏必须剥掉', async () => {
   const { bridge, transport, agents } = await setup({}, {}, { capabilities: { markdown: true } })
   await bridge.handleUserMessage(transport.injectText('ping'))
   const agent = agents.live.get(agents.created[0].sessionId)
   const assembled = await agent.ctx.runWaterfall('system-prompt/assemble', [{}, {}], async () => ({ sections: [], variables: {} }))
-  assert.equal(assembled.sections.length, 0, '能渲染 Markdown 的渠道不该被加纯文本提示')
+  // 官方 QQBot 能渲染 Markdown，所以不加纯文本提示；但必须告诉模型 dsh-ui 围栏在 QQ 里不渲染
+  assert.equal(assembled.sections.some(section => section.name === 'dsh-qq/channel-plaintext'), false)
+  const uiNote = assembled.sections.find(section => section.name === 'dsh-qq/channel-markdown')
+  assert.notEqual(uiNote, undefined, 'Markdown 渠道也要提示模型不要输出 dsh-ui 围栏')
+  assert.match(uiNote.text, /dsh-ui/)
 
-  agent.reply('**加粗照旧**')
+  // 普通 Markdown 照旧；dsh-ui 围栏整块删除（否则 QQ 里显示成一大段 JSON 代码块）
+  agent.reply('**加粗照旧**\n\n```dsh-ui\n{"gap":14,"items":[]}\n```')
   agent.ctx.emitStatus('idle')
   await tick()
-  assert.equal(transport.lastText(), '**加粗照旧**')
+  const sent = transport.lastText()
+  assert.equal(sent, '**加粗照旧**', 'Markdown 保留，围栏剥离')
+  assert.equal(sent.includes('dsh-ui'), false)
+  assert.equal(sent.includes('"gap"'), false)
+})
+
+test('stripDshUiFences：多段围栏、围栏在中间、只有围栏', () => {
+  const mixed = '前文\n\n```dsh-ui\n{"a":1}\n```\n\n中间\n\n```dsh-ui\n{"b":2}\n```\n\n后文'
+  assert.equal(stripDshUiFences(mixed), '前文\n\n中间\n\n后文')
+  assert.equal(stripDshUiFences('```dsh-ui\n{"a":1}\n```'), '')
+  assert.equal(stripDshUiFences('没有围栏'), '没有围栏')
+})
+
+test('Markdown 渠道：整条回复只有卡片时如实说明，不静默发空消息', async () => {
+  const { bridge, transport, agents } = await setup({}, {}, { capabilities: { markdown: true } })
+  await bridge.handleUserMessage(transport.injectText('ping'))
+  const agent = agents.live.get(agents.created[0].sessionId)
+  agent.reply('```dsh-ui\n{"title":"只有卡片"}\n```')
+  agent.ctx.emitStatus('idle')
+  await tick()
+  assert.match(transport.lastText(), /只有卡片内容/)
 })
 
 test('纯文本渠道：整条回复只有卡片时如实说明，不静默发空消息', async () => {

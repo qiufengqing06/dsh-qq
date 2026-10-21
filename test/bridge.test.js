@@ -7,22 +7,23 @@ import { join } from 'node:path'
 import { resolveConfig } from '../lib/config.js'
 import { createStore } from '../lib/store.js'
 import { createMockTransport } from '../lib/mock.js'
+import { createGroupMemory } from '../lib/group-memory.js'
 import { createResourceScope } from '../lib/scope.js'
-import { createBridge, extractAssistantText, extractTurnError, lastEventSeq } from '../lib/bridge.js'
+import { createBridge, extractAssistantText, extractTurnError, lastEventSeq, toPlainText } from '../lib/bridge.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
 const tick = (ms = 15) => new Promise(resolve => setTimeout(resolve, ms))
 
-async function setup(overrides = {}, serviceOverrides = {}) {
+async function setup(overrides = {}, serviceOverrides = {}, transportOptions = {}, bridgeOptions = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-bridge-'))
   const config = resolveConfig({ transport: 'mock', autoConnect: false, dataDir: dir, ...overrides })
   const store = createStore({ dir, logger: createLogger() })
   await store.load()
-  const transport = createMockTransport({})
+  const transport = createMockTransport(transportOptions)
   const agents = createFakeAgents()
   const ctx = createFakeCtx({ services: { agents, ...serviceOverrides } })
   const scope = createResourceScope({ name: 'test' })
-  const bridge = createBridge({ ctx, config, store, transport, scope, logger: createLogger() })
+  const bridge = createBridge({ ctx, config, store, transport, scope, logger: createLogger(), ...bridgeOptions })
   return { dir, config, store, transport, agents, ctx, scope, bridge }
 }
 
@@ -649,7 +650,7 @@ test('midTurnDelivery=queue：保留旧行为（运行中也走 followup 独占�
   assert.equal(agent.followed.length, 2)
 })
 
-test('steer 不泄漏在途名额：轮末释放后队列可继续接收', async () => {
+test('steer 不泄漏在途名额：消息被消费即释放，轮末也释放', async () => {
   const { bridge, transport, agents } = await setup({ maxQueuedMessagesPerChat: 2 })
   await bridge.handleUserMessage(transport.injectText('一'))
   const agent = agents.live.get(agents.created[0].sessionId)
@@ -657,12 +658,33 @@ test('steer 不泄漏在途名额：轮末释放后队列可继续接收', async
 
   assert.equal((await bridge.handleUserMessage(transport.injectText('二'))).accepted, true, 'steer 计入在途')
   const third = await bridge.handleUserMessage(transport.injectText('三'))
-  assert.equal(third.accepted, false, '在途上限对 steer 同样生效')
+  assert.equal(third.accepted, false, '未被消费时上限仍然生效（配额不能被绕过）')
   assert.equal(third.reason, 'over-queue')
+
+  // 被 steer 的消息在下一个步边界被模型消费：会话补一条 user/message
+  agent.session.append('user/message', { id: 'm-二', role: 'user', content: [{ type: 'text', text: '二' }] })
+  assert.equal((await bridge.handleUserMessage(transport.injectText('三'))).accepted, true, '消费后必须立即释放名额')
 
   agent.ctx.emitStatus('idle')
   await tick()
-  assert.equal((await bridge.handleUserMessage(transport.injectText('四'))).accepted, true, '轮末必须释放 steer 名额')
+  assert.equal((await bridge.handleUserMessage(transport.injectText('四'))).accepted, true, '轮末也必须释放')
+})
+
+test('回归：一轮里连发 10 条不会被误判「在途消息过多」（真机丢过第 9 条）', async () => {
+  // 真机 2026-09-24：一轮里连发 10 条，第 9 条被拒。原因是 steered 只增不减
+  // （只在轮末清零），pending 1 + steered 7 = 8 正好撞上默认上限。
+  const { bridge, transport, agents } = await setup()
+  assert.equal((await bridge.handleUserMessage(transport.injectText('1'))).accepted, true)
+  const agent = agents.live.get(agents.created[0].sessionId)
+  agent.ctx.emitStatus('running')
+
+  for (let index = 2; index <= 10; index += 1) {
+    const result = await bridge.handleUserMessage(transport.injectText(String(index)))
+    assert.equal(result.accepted, true, `第 ${index} 条必须被接收（真机上第 9 条就是这样丢的）`)
+    // 复刻真机：这条 steer 消息在下一个步边界被消费
+    agent.session.append('user/message', { id: `m-${index}`, role: 'user', content: [{ type: 'text', text: String(index) }] })
+  }
+  assert.equal(agent.steered.length, 9)
 })
 
 test('steer 的回复仍走同一回合的缓冲（轮末一次性回发）', async () => {
@@ -781,4 +803,320 @@ test('群聊说话人标签：昵称 sanitize + 带 QQ 号（昵称是外部可�
   await bridge.handleUserMessage(dm)
   assert.equal((await bridge.currentSession(dm.chatKey)) !== undefined, true)
   assert.equal(delivered().at(-1), '私聊内容')
+})
+
+// ── 引用带附件的消息（群文件的唯一用法：先发文件 → 引用它提问） ──
+
+test('引用文件消息：用附件描述当引用标签，并把被引附件一并入库', async () => {
+  // 真机 2026-09-24：QQ 里文件和文字没法合成一条消息，用户只能先发文件、再引用它提问。
+  // 原先被引消息没有文本 → 引用块整块不出现，模型只能回「我这边没有附件」。
+  const saved = []
+  const attachments = {
+    async saveFile({ data }) {
+      saved.push(data)
+      return { id: 'att-xls', kind: 'file' }
+    },
+    async saveImage() {
+      return { id: 'att-img', kind: 'image' }
+    },
+  }
+  const { bridge, transport, agents } = await setup({}, { attachments })
+  transport.addMedia('https://example.invalid/0915.xls', { data: Buffer.from('xls-bytes') })
+
+  const ev = transport.inject({
+    text: '这个文件讲的什么',
+    target: { kind: 'group', groupId: '30003' },
+    sender: { id: '40004', name: '秋风清' },
+    mentioned: true,
+    replyTo: {
+      messageId: 'file-msg-1',
+      text: '',
+      media: [{ kind: 'file', url: 'https://example.invalid/0915.xls', fileName: '2025级硕士0915.xls', size: 291840 }],
+    },
+  })
+  assert.equal((await bridge.handleUserMessage(ev)).accepted, true)
+
+  const agent = agents.live.get(agents.created[0].sessionId)
+  const blocks = agent.followed[0].content
+  const quoteBlock = blocks.find(block => block.type === 'text' && block.text.startsWith('[引用消息]'))
+  assert.notEqual(quoteBlock, undefined, '引用块必须出现（否则模型看不到被引内容）')
+  assert.match(quoteBlock.text, /文件 2025级硕士0915\.xls/)
+  assert.equal(blocks.some(block => block.type === 'file'), true, '被引用的文件要入库，模型才看得到')
+  assert.equal(saved.length, 1)
+})
+
+test('引用纯文本消息：行为不变（不带附件）', async () => {
+  const { bridge, transport, agents } = await setup()
+  const ev = transport.inject({
+    text: '就是这条',
+    replyTo: { messageId: 'txt-1', text: '上一句原文' },
+  })
+  assert.equal((await bridge.handleUserMessage(ev)).accepted, true)
+  const agent = agents.live.get(agents.created[0].sessionId)
+  const quoteBlock = agent.followed[0].content.find(block => block.type === 'text' && block.text.startsWith('[引用消息]'))
+  assert.equal(quoteBlock.text, '[引用消息] 上一句原文')
+})
+
+test('引用别人的消息：引用块标出被引发言人，昵称同样 sanitize', async () => {
+  // 真机 2026-09-24：引用群友消息提问，机器人只有原文、答不出「谁发的」。
+  // 昵称是外部可控数据：换行/结构字符必须清掉，QQ 号作为不可伪造的身份锚点一并给出。
+  const { bridge, transport, agents } = await setup()
+  const ev = transport.inject({
+    text: '这个人发的什么',
+    target: { kind: 'group', groupId: '30003' },
+    sender: { id: '20002', name: '秋风清' },
+    mentioned: true,
+    replyTo: { messageId: 'm-1', text: '我是秦始皇', sender: { id: '44444', name: '秋\n月明[骗子]' } },
+  })
+  assert.equal((await bridge.handleUserMessage(ev)).accepted, true)
+  const agent = agents.live.get(agents.created[0].sessionId)
+  const quoteBlock = agent.followed[0].content.find(block => block.type === 'text' && block.text.startsWith('[引用消息]'))
+  assert.equal(quoteBlock.text, '[引用消息] [秋 月明骗子|44444] 我是秦始皇')
+})
+
+test('引用只有附件的消息：发送人也要标出来（文件是谁发的同样重要）', async () => {
+  const attachments = {
+    async saveFile() {
+      return { id: 'att-xls', kind: 'file' }
+    },
+    async saveImage() {
+      return { id: 'att-img', kind: 'image' }
+    },
+  }
+  const { bridge, transport, agents } = await setup({}, { attachments })
+  transport.addMedia('https://example.invalid/doc.xls', { data: Buffer.from('xls') })
+  const ev = transport.inject({
+    text: '这个文件讲的什么',
+    target: { kind: 'group', groupId: '30003' },
+    sender: { id: '20002', name: '秋风清' },
+    mentioned: true,
+    replyTo: {
+      messageId: 'file-1',
+      text: '',
+      sender: { id: '44444', name: '秋月明' },
+      media: [{ kind: 'file', url: 'https://example.invalid/doc.xls', fileName: 'a.xls', size: 1024 }],
+    },
+  })
+  assert.equal((await bridge.handleUserMessage(ev)).accepted, true)
+  const agent = agents.live.get(agents.created[0].sessionId)
+  const quoteBlock = agent.followed[0].content.find(block => block.type === 'text' && block.text.startsWith('[引用消息]'))
+  assert.match(quoteBlock.text, /^\[引用消息\] \[秋月明\|44444\] 文件 a\.xls/)
+})
+
+// ── 纯文本渠道（个人 QQ / Mock：不渲染 Markdown、无卡片） ──
+test('toPlainText：去掉 Markdown/卡片语法，保留内容与顺序', () => {
+  const markdown = [
+    '**重点**：这次成功了 🎉',
+    '',
+    '### 观测点',
+    '- 原文：`msg-1`',
+    '',
+    '| 项 | 结果 |',
+    '| --- | --- |',
+    '| 引用 | ✅ |',
+    '',
+    '见 [文档](https://example.com/a)。',
+    '',
+    '```js',
+    'const a = 1',
+    '```',
+  ].join('\n')
+  const plain = toPlainText(markdown)
+  assert.equal(plain.includes('**'), false, '不得残留加粗标记')
+  assert.equal(plain.includes('###'), false, '不得残留标题标记')
+  assert.equal(plain.includes('`'), false, '不得残留反引号')
+  assert.equal(plain.includes('| --- |'), false, '不得残留表格分隔行')
+  assert.equal(plain.includes(']('), false, '不得残留 markdown 链接语法')
+  assert.match(plain, /重点：这次成功了/)
+  assert.match(plain, /观测点/)
+  assert.match(plain, /const a = 1/, '代码内容必须保留')
+  assert.match(plain, /文档（https:\/\/example\.com\/a）/)
+  assert.equal(plain.indexOf('重点'), 0, '顺序不变')
+})
+
+test('toPlainText：dsh-ui 卡片围栏整块删除（纯文本渠道里只剩 JSON）', () => {
+  const text = '好的，看这张卡片：\n\n```dsh-ui\n{"title":"测试","items":[{"type":"table"}]}\n```\n\n以上。'
+  const plain = toPlainText(text)
+  assert.equal(plain.includes('dsh-ui'), false)
+  assert.equal(plain.includes('"items"'), false)
+  assert.equal(plain, '好的，看这张卡片：\n\n以上。')
+  // 整条只有卡片时返回空串（由 bridge 回一句可读说明，不静默发空消息）
+  assert.equal(toPlainText('```dsh-ui\n{"a":1}\n```'), '')
+})
+
+test('无 Markdown 能力的渠道：回复自动纯文本化并带上渠道提示段', async () => {
+  const { bridge, transport, agents } = await setup({}, {}, { capabilities: { markdown: false } })
+  await bridge.handleUserMessage(transport.injectText('ping'))
+  const agent = agents.live.get(agents.created[0].sessionId)
+
+  // ① 系统提示词里出现「本渠道纯文本」的说明（从源头少生成 Markdown 与卡片）
+  const assembled = await agent.ctx.runWaterfall('system-prompt/assemble', [{}, {}], async () => ({ sections: [], variables: {} }))
+  const note = assembled.sections.find(section => section.name === 'dsh-qq/channel-plaintext')
+  assert.notEqual(note, undefined, '纯文本渠道必须提示模型')
+  assert.match(note.text, /不渲染 Markdown/)
+  assert.equal(note.interpolate, false, '提示文本不得被变量插值改写')
+
+  // ② 回复里的 Markdown 被降级；dsh-ui 卡片不发给用户
+  agent.reply('**完成**：\n\n```dsh-ui\n{"title":"x"}\n```\n\n细节见 [说明](https://example.com)。')
+  agent.ctx.emitStatus('idle')
+  await tick()
+  const sent = transport.lastText()
+  assert.equal(sent.includes('**'), false)
+  assert.equal(sent.includes('dsh-ui'), false)
+  assert.match(sent, /完成/)
+  assert.match(sent, /说明（https:\/\/example\.com）/)
+})
+
+test('有 Markdown 能力的渠道（官方 QQBot）：原样发送，不加提示也不降级', async () => {
+  const { bridge, transport, agents } = await setup({}, {}, { capabilities: { markdown: true } })
+  await bridge.handleUserMessage(transport.injectText('ping'))
+  const agent = agents.live.get(agents.created[0].sessionId)
+  const assembled = await agent.ctx.runWaterfall('system-prompt/assemble', [{}, {}], async () => ({ sections: [], variables: {} }))
+  assert.equal(assembled.sections.length, 0, '能渲染 Markdown 的渠道不该被加纯文本提示')
+
+  agent.reply('**加粗照旧**')
+  agent.ctx.emitStatus('idle')
+  await tick()
+  assert.equal(transport.lastText(), '**加粗照旧**')
+})
+
+test('纯文本渠道：整条回复只有卡片时如实说明，不静默发空消息', async () => {
+  const { bridge, transport, agents } = await setup({}, {}, { capabilities: { markdown: false } })
+  await bridge.handleUserMessage(transport.injectText('ping'))
+  const agent = agents.live.get(agents.created[0].sessionId)
+  agent.reply('```dsh-ui\n{"title":"只有卡片"}\n```')
+  agent.ctx.emitStatus('idle')
+  await tick()
+  assert.match(transport.lastText(), /只有卡片内容/)
+})
+
+// ── 群记忆：长期笔记 + 「上次之后」的群消息注入（零额外 LLM 调用） ──
+
+test('群会话：注入「群记忆 + 群最近消息」，且在用户消息之前；私聊不注入', async () => {
+  const calls = []
+  const ambientContext = async ev => {
+    calls.push(ev.chatKey)
+    return { notes: '- 群里管群主叫「堂主」', recent: '12:00 [秋月明|44444] 我是秦始皇', omitted: 3 }
+  }
+  const { bridge, transport, agents } = await setup({}, {}, {}, { ambientContext })
+
+  const groupEv = transport.inject({
+    text: '堂主是谁',
+    target: { kind: 'group', groupId: '30003' },
+    sender: { id: '20002', name: '秋风清' },
+    mentioned: true,
+  })
+  await bridge.handleUserMessage(groupEv)
+  const groupBlocks = agents.live.get(agents.created[0].sessionId).followed[0].content
+  assert.equal(groupBlocks[0].type, 'text')
+  assert.match(groupBlocks[0].text, /^\[群记忆\]\n- 群里管群主叫「堂主」$/)
+  assert.equal(groupBlocks[1].type, 'text')
+  assert.match(groupBlocks[1].text, /^\[群最近消息（含未 @ 你的）\]\n12:00 \[秋月明\|44444\] 我是秦始皇\n（更早还有 3 条未显示）$/)
+  assert.match(groupBlocks.at(-1).text, /堂主是谁/, '用户消息必须在上下文之后')
+  assert.deepEqual(calls, [groupEv.chatKey])
+
+  const dm = transport.inject({ text: '私聊不该有群上下文', target: { kind: 'dm', userId: '777' }, sender: { id: '777', name: 'D' } })
+  await bridge.handleUserMessage(dm)
+  assert.deepEqual(calls, [groupEv.chatKey], '私聊不得调用群上下文')
+  const dmBlocks = agents.live.get(agents.created[1].sessionId).followed[0].content
+  assert.equal(dmBlocks.length, 1)
+})
+
+test('群上下文取不到时照常回答（增强项失败不得丢消息）', async () => {
+  const ambientContext = async () => {
+    throw new Error('模拟群记忆故障')
+  }
+  const { bridge, transport, agents } = await setup({}, {}, {}, { ambientContext })
+  const ev = transport.inject({
+    text: '还在吗',
+    target: { kind: 'group', groupId: '30003' },
+    sender: { id: '20002', name: '秋风清' },
+    mentioned: true,
+  })
+  assert.deepEqual(await bridge.handleUserMessage(ev), { accepted: true })
+  assert.match(agents.live.get(agents.created[0].sessionId).followed[0].content[0].text, /还在吗/)
+})
+
+test('群会话系统提示：告知「群记忆 / 群最近消息」来源与 qq_group_note 用法；私聊不加', async () => {
+  const { bridge, transport, agents } = await setup()
+  const groupEv = transport.inject({
+    text: 'hi',
+    target: { kind: 'group', groupId: '30003' },
+    sender: { id: '20002', name: '秋风清' },
+    mentioned: true,
+  })
+  await bridge.handleUserMessage(groupEv)
+  const groupAgent = agents.live.get(agents.created[0].sessionId)
+  const assembled = await groupAgent.ctx.runWaterfall('system-prompt/assemble', [{}, {}], async () => ({ sections: [], variables: {} }))
+  const note = assembled.sections.find(section => section.name === 'dsh-qq/group-memory')
+  assert.notEqual(note, undefined, '群会话必须拿到群记忆提示')
+  assert.match(note.text, /qq_group_note/)
+  assert.match(note.text, /不要把它写进 daily \/ project \/ key 记忆/)
+
+  const dm = transport.inject({ text: 'hi', target: { kind: 'dm', userId: '888' }, sender: { id: '888', name: 'D' } })
+  await bridge.handleUserMessage(dm)
+  const dmAgent = agents.live.get(agents.created[1].sessionId)
+  const dmAssembled = await dmAgent.ctx.runWaterfall('system-prompt/assemble', [{}, {}], async () => ({ sections: [], variables: {} }))
+  assert.equal(dmAssembled.sections.some(section => section.name === 'dsh-qq/group-memory'), false, '私聊不需要群记忆提示')
+})
+
+test('群记忆关闭时：不注入、不加系统提示', async () => {
+  // 用真实模块 + 与 index.js 同款的接线，验证「关闭」这条路真的通（不是靠假的 provider 装样子）
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-gm-off-'))
+  const config = resolveConfig({ transport: 'mock', dataDir: dir, groupMemory: { enabled: false } })
+  const memory = createGroupMemory({ dir, config, logger: createLogger() })
+  const ambientContext = async ev => ({
+    notes: await memory.notesOf(ev.chatKey),
+    recent: memory.pendingContext(ev.chatKey).text,
+    omitted: 0,
+  })
+  const { bridge, transport, agents } = await setup({ groupMemory: { enabled: false } }, {}, {}, { ambientContext })
+  const ev = transport.inject({
+    text: 'hi',
+    target: { kind: 'group', groupId: '30003' },
+    sender: { id: '20002', name: '秋风清' },
+    mentioned: true,
+  })
+  await bridge.handleUserMessage(ev)
+  const agent = agents.live.get(agents.created[0].sessionId)
+  assert.equal(agent.followed[0].content.length, 1, '关闭后不得注入群上下文')
+  const assembled = await agent.ctx.runWaterfall('system-prompt/assemble', [{}, {}], async () => ({ sections: [], variables: {} }))
+  assert.equal(assembled.sections.some(section => section.name === 'dsh-qq/group-memory'), false)
+})
+
+
+test('回合失败若被判定为「模型不可用」，消息里追加可执行的下一步提示', async () => {
+  // onTurnError 由 index 接 control.recoverFromModelFailure；这里用假的回调验证 bridge 的接线
+  const calls = []
+  const { bridge, transport, agents } = await setup({}, {}, {}, {
+    onTurnError: async (chatKey, failure) => {
+      calls.push({ chatKey, failure })
+      return '（已回退到 DSH 全局默认：请再发一次）'
+    },
+  })
+  await bridge.handleUserMessage(transport.injectText('ping'))
+  const agent = agents.live.get(agents.created[0].sessionId)
+  agent.endTurn({ completed: false, error: 'llm-deepseek: no API key for provider route "deepseek-official"' })
+  agent.ctx.emitStatus('idle')
+  await tick(30)
+
+  assert.equal(calls.length, 1)
+  assert.match(calls[0].failure, /no API key/)
+  const sent = transport.dump().filter(entry => entry.kind === 'text').map(entry => entry.text)
+  assert.match(sent[0], /DSH 本轮执行失败/)
+  assert.match(sent[0], /已回退到 DSH 全局默认/, '失败消息要带上可执行的下一步')
+})
+
+test('已存在的活会话每轮都重新套用当前模型选择（否则配置改了选择还停在旧值）', async () => {
+  const calls = []
+  const { bridge, transport, agents } = await setup({}, {}, {}, {
+    onAgentReady: (agent, chatKey) => calls.push({ chatKey, session: agent.session.id }),
+  })
+  await bridge.handleUserMessage(transport.injectText('一'))
+  const agent = agents.live.get(agents.created[0].sessionId)
+  agent.ctx.emitStatus('idle')
+  await tick()
+  await bridge.handleUserMessage(transport.injectText('二'))
+  assert.equal(calls.length, 2, '新建（resume/create）与复用（已活着）两条路径都要套用')
+  assert.equal(calls[0].session, calls[1].session, '同一个会话')
 })

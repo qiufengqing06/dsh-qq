@@ -17,19 +17,19 @@ import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ct
 
 const tick = (ms = 20) => new Promise(resolve => setTimeout(resolve, ms))
 
-async function setup({ transport = null, configOverrides = {} } = {}) {
+async function setup({ transport = null, configOverrides = {}, controlOptions = {}, ctxServices = {} } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-control-'))
   const config = resolveConfig({ transport: 'mock', autoConnect: false, dataDir: dir, ...configOverrides })
   const store = createStore({ dir, logger: createLogger() })
   await store.load()
   const tp = transport ?? createMockTransport({})
   const agents = createFakeAgents()
-  const ctx = createFakeCtx({ services: { agents } })
+  const ctx = createFakeCtx({ services: { agents, ...ctxServices } })
   const scope = createResourceScope({ name: 'test' })
   const logger = createLogger()
   const approval = createApprovalRegistry({})
   const bridge = createBridge({ ctx, config, store, transport: tp, scope, logger })
-  const control = createControl({ ctx, config, store, bridge, transport: tp, approval, scope, logger })
+  const control = createControl({ ctx, config, store, bridge, transport: tp, approval, scope, logger, ...controlOptions })
   const disposeAnswerer = control.installApprovalAnswerer()
   if (typeof disposeAnswerer === 'function') scope.add(disposeAnswerer, 'test: approval answerer')
   return { dir, config, store, tp, agents, ctx, scope, logger, approval, bridge, control }
@@ -267,7 +267,11 @@ function createFakeDefaultModel(selection = { provider: 'deepseek-official', mod
       return { ...this.selection }
     },
     async saveSelection(next) {
+      // 贴近真实：Web profile 挂载了 configEditor，保存后 currentSelection() 会跟着变
+      //（DSH 0.1.7 起 saveSelection 委托给配置编辑器；没有编辑器时才是静默 no-op，
+      // 那条路径由「静默 no-op 必须如实上报」用例单独覆盖）
       this.saved.push(next)
+      this.selection = { ...next }
     },
   }
 }
@@ -283,7 +287,7 @@ function createFakeTitles() {
   }
 }
 
-async function setupP3({ configOverrides = {}, llmReject = [] } = {}) {
+async function setupP3({ configOverrides = {}, llmReject = [], services = {} } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-p3-'))
   const config = resolveConfig({ transport: 'mock', autoConnect: false, dataDir: dir, ...configOverrides })
   const store = createStore({ dir })
@@ -294,7 +298,7 @@ async function setupP3({ configOverrides = {}, llmReject = [] } = {}) {
   const agentDefaultModel = createFakeDefaultModel()
   const sessionTitle = createFakeTitles()
   const ctx = createFakeCtx({
-    services: { agents, llm, agentDefaultModel, sessionTitle },
+    services: { agents, llm, agentDefaultModel, sessionTitle, ...services },
   })
   const scope = createResourceScope({ name: 'p3' })
   const approval = createApprovalRegistry({})
@@ -369,8 +373,10 @@ test('P3 /qq-model：非法路由被 llm 校验拦下，状态不变', async () 
   const env = await setupP3({ llmReject: ['ghost/nope'] })
   const { reply } = await env.control.execute(parseCommand('/qq-model ghost/nope'), env.cmdEv, { role: 'owner' })
   assert.match(reply, /模型不可用/)
-  assert.equal(env.store.chat(env.cmdEv.chatKey).model, 'deepseek-official/deepseek-flash', '非法路由不应改动既有选择')
+  assert.equal(env.store.chat(env.cmdEv.chatKey).model ?? null, null, '非法路由不得写入任何显式选择')
   assert.equal(env.agent.ctx.listenerCount('agent/request'), 1, '默认选择监听应保持')
+  const request = await env.agent.ctx.runWaterfall('agent/request', [{}], async () => ({ provider: 'x', model: 'y' }))
+  assert.equal(request.model, 'deepseek-flash', '生效模型仍是默认选择')
 })
 
 test('P3 /qq-model：用法错误与 list 提示', async () => {
@@ -715,7 +721,7 @@ test('Web 执行会话相关命令时给出「请在 QQ 里发送」的提示', 
 
 // ── 回归：ensureSelection 必须给 QQ 会话装上模型选择（{{model}} 变量） ──
 
-test('ensureSelection：无持久化选择时用 DSH 默认模型安装变量并落库', async () => {
+test('ensureSelection：无持久化选择时用默认模型安装变量，且默认不写回 store', async () => {
   const env = await setupP3()
   const installed = env.control.ensureSelection(env.agent, env.cmdEv.chatKey)
   assert.ok(installed !== null)
@@ -730,9 +736,8 @@ test('ensureSelection：无持久化选择时用 DSH 默认模型安装变量并
   const request = await env.agent.ctx.runWaterfall('agent/request', [{}], async () => ({ provider: 'x', model: 'y' }))
   assert.equal(request.provider, 'deepseek-official')
   assert.equal(request.model, 'deepseek-flash')
-  // 落库（/qq-status 与后续切换可见）
-  assert.equal(env.store.chat(env.cmdEv.chatKey).model, 'deepseek-official/deepseek-flash')
-  assert.equal(env.store.chat(env.cmdEv.chatKey).reasoning, 'max', '推理强度也要落库')
+  // **默认不落库**：落库就等于把默认当成用户选择，以后改默认再也不生效（真机踩过）
+  assert.equal(env.store.chat(env.cmdEv.chatKey).model ?? null, null, '默认选择不得伪装成会话选择')
   assert.equal(env.agent.appended.at(-1).type, 'model/selection')
   await env.scope.dispose()
 })
@@ -746,6 +751,31 @@ test('ensureSelection：优先使用该 chat 持久化的选择（跨重启保�
   assert.equal(installed.reasoningEffort, 'high')
   const assembled = await env.agent.ctx.runWaterfall('system-prompt/assemble', [{}, {}], async () => ({ variables: {} }))
   assert.equal(assembled.variables.model, 'mimo-7b')
+  await env.scope.dispose()
+})
+
+test('ensureSelection：配置了 agentOptions 时优先于 DSH 全局默认（QQ 渠道自己的默认）', async () => {
+  // 真机反馈：QQ 侧要 deepseek-flash/low，而 Web 全局默认是 flash/max —— 两边诉求不同，
+  // 渠道配置必须赢，否则每次重启 QQ 会话都会跟着 Web 的默认跑。
+  const env = await setupP3({
+    configOverrides: { agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'low' } },
+  })
+  const installed = env.control.ensureSelection(env.agent, env.cmdEv.chatKey)
+  assert.equal(installed.provider, 'deepseek-official')
+  assert.equal(installed.model, 'deepseek-flash')
+  assert.equal(installed.reasoningEffort, 'low', '插件配置的推理强度必须覆盖全局默认的 max')
+  assert.equal(env.store.chat(env.cmdEv.chatKey).model ?? null, null, '默认不落库，改配置下次就生效')
+  await env.scope.dispose()
+})
+
+test('ensureSelection：会话级持久化选择仍然赢过插件默认（用户显式选过就听用户的）', async () => {
+  const env = await setupP3({
+    configOverrides: { agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'low' } },
+  })
+  await env.store.setSelection(env.cmdEv.chatKey, { model: 'mimo/mimo-v2.6-pro', reasoning: 'high' })
+  const installed = env.control.ensureSelection(env.agent, env.cmdEv.chatKey)
+  assert.equal(installed.model, 'mimo-v2.6-pro')
+  assert.equal(installed.reasoningEffort, 'high')
   await env.scope.dispose()
 })
 
@@ -764,6 +794,169 @@ test('ensureSelection：既无默认模型也无持久化选择时如实告警�
   await bridge.handleUserMessage(tp.injectText('hi'))
   const agent = agents.live.get(agents.created[0].sessionId)
   assert.equal(control.ensureSelection(agent, 'mock:acct:dm:u1'), null)
-  assert.ok(logger.entries.warn.some(line => line.includes('既无会话选择也无 DSH 默认模型')))
+  assert.ok(logger.entries.warn.some(line => line.includes('既无会话选择也无默认模型')))
   await scope.dispose()
+})
+
+test('回归（DSH 0.1.7）：saveSelection 静默 no-op 时必须如实上报，不得谎报成功', async () => {
+  // 新 DSH 的 saveSelection() 是 `ctx.get('configEditor')?.edit(...)`：没有编辑器时**静默返回**，
+  // 不抛错也不改 currentSelection()。旧实现只看「没抛错」就回「已设为全局默认」——
+  // 那就是本项目最忌讳的「写了不生效」。真机踩点：2026-09-25 DSH 升级到 0.1.7-alpha.2。
+  const env = await setupP3()
+  const defaultModel = env.ctx.get('agentDefaultModel')
+  defaultModel.saveSelection = async next => {
+    defaultModel.saved.push(next) // 只记录，不改变 selection（= 静默 no-op）
+  }
+  const { reply } = await env.control.execute(parseCommand('/qq-model mimo/mimo-7b --default'), env.cmdEv, { role: 'owner' })
+  assert.equal(reply.includes('并已设为全局默认'), false, '不得谎报成功')
+  assert.match(reply, /全局默认未写入/)
+  assert.match(reply, /agentOptions/, '必须给出可操作的替代路径')
+  await env.scope.dispose()
+})
+
+test('回归（DSH 0.1.7）：挂了 configEditor 但写入未生效时如实上报（回读不一致）', async () => {
+  const env = await setupP3({ services: { configEditor: { async edit() { /* 假装写了但没生效 */ } } } })
+  const defaultModel = env.ctx.get('agentDefaultModel')
+  defaultModel.saveSelection = async next => {
+    defaultModel.saved.push(next)
+  }
+  const { reply } = await env.control.execute(parseCommand('/qq-model mimo/mimo-7b --default'), env.cmdEv, { role: 'owner' })
+  assert.match(reply, /全局默认未生效/)
+  assert.match(reply, /回读不一致/)
+  await env.scope.dispose()
+})
+
+test('DSH 0.1.7：configEditor 正常写入时仍然报成功（不误伤正常部署）', async () => {
+  const env = await setupP3({ services: { configEditor: { async edit() {} } } })
+  const { reply } = await env.control.execute(parseCommand('/qq-model mimo/mimo-7b --default'), env.cmdEv, { role: 'owner' })
+  assert.match(reply, /并已设为全局默认/)
+  await env.scope.dispose()
+})
+
+// ── DSH 0.1.7-rc：审批请求的本地化提示 displayReason ──
+
+test('审批文案：优先用 displayReason 的中文整句，而不是审计用的机器串', async () => {
+  // DSH 0.1.7-rc 起 sandbox 升级审批会带 displayReason {en, zh}：
+  //   reason        = `escalate sandbox to danger-full-access: 往工作区外写文件`
+  //   displayReason = { zh: '允许本次操作使用 danger-full-access 权限：往工作区外写文件' }
+  // QQ 用户该看到的是后者。
+  const { control, bridge, tp, ctx, agents, approval } = await setup({ configOverrides: { approvalTtlMs: 1000 } })
+  const ev = tp.injectText('往工作区外写文件')
+  await bridge.handleUserMessage(ev)
+  const sessionId = agents.created[0].sessionId
+
+  ctx.emitWaterfall('approval/request', {
+    agent: { session: { id: sessionId } },
+    toolName: 'bash',
+    reason: 'escalate sandbox to danger-full-access: 往工作区外写文件',
+    displayReason: {
+      en: 'Allow this operation with danger-full-access permissions: 往工作区外写文件',
+      zh: '允许本次操作使用 danger-full-access 权限：往工作区外写文件',
+    },
+  })
+  await tick(30)
+  const keyboard = tp.dump().find(entry => entry.kind === 'keyboard')
+  assert.match(keyboard.text, /说明：允许本次操作使用 danger-full-access 权限：往工作区外写文件/)
+  assert.equal(keyboard.text.includes('escalate sandbox to'), false, '不得把审计机器串给用户看')
+  const record = approval.get(keyboard.buttons[0].data.match(/qqapproval:([^:]+)/)?.[1] ?? '')
+  assert.match(record.summary, /允许本次操作使用/, '摘要也该用本地化文案')
+  // 必须把待审批结掉：waitForDecision 的轮询刻意不 unref（未完成的真实操作要占住事件循环），
+  // 留着不管会让整个测试进程一直等到 TTL 到期才退出（真机踩点：全量从 25s 变 300s）。
+  await control.handleApprovalButton(keyboard.buttons[0].data, { chatKey: ev.chatKey, sender: { id: ev.sender.id } }, 'allow')
+  await tick(300)
+})
+
+test('审批文案：只有 en 时回落 en；没有 displayReason 时仍用 reason（老宿主兼容）', async () => {
+  const { control, bridge, tp, ctx, agents } = await setup({ configOverrides: { approvalTtlMs: 1000 } })
+  const ev = tp.injectText('x')
+  await bridge.handleUserMessage(ev)
+  const sessionId = agents.created[0].sessionId
+
+  ctx.emitWaterfall('approval/request', {
+    agent: { session: { id: sessionId } },
+    toolName: 'bash',
+    reason: 'rm -rf build',
+    displayReason: { en: 'Allow this operation with workspace-write permissions: cleanup' },
+  })
+  await tick(30)
+  const first = tp.dump().filter(entry => entry.kind === 'keyboard').at(-1)
+  assert.match(first.text, /说明：Allow this operation with workspace-write permissions: cleanup/)
+
+  // 老宿主 / 其他生产者：没有 displayReason，回落 reason（行为不变）
+  ctx.emitWaterfall('approval/request', {
+    agent: { session: { id: sessionId } },
+    toolName: 'bash',
+    reason: 'rm -rf build',
+  })
+  await tick(30)
+  const second = tp.dump().filter(entry => entry.kind === 'keyboard').at(-1)
+  assert.match(second.text, /原因：rm -rf build/)
+  assert.equal(second.text.includes('说明：'), false)
+
+  // 两条待审批都要结掉，否则进程要等满 TTL 才退出（见上一条用例的说明）
+  await control.handleApprovalButton(first.buttons[0].data, { chatKey: ev.chatKey, sender: { id: ev.sender.id } }, 'allow')
+  await control.handleApprovalButton(second.buttons[1].data, { chatKey: ev.chatKey, sender: { id: ev.sender.id } }, 'deny')
+  await tick(300)
+})
+
+test('/qq-config：有 Web 配置页时给出链接与当前配置摘要', async () => {
+  const env = await setup({ controlOptions: { configPageUrl: () => 'http://127.0.0.1:3080/dsh-qq' } })
+  const { reply } = await run(env.control, '/qq-config')
+  assert.match(reply, /Web 配置页/)
+  assert.match(reply, /http:\/\/127\.0\.0\.1:3080\/dsh-qq/)
+  assert.match(reply, /传输：mock/)
+  assert.match(reply, /群聊：mentionRequired=true/)
+  assert.match(reply, /群记忆：开/)
+  assert.equal(reply.includes('QQ_CLIENT_SECRET'), false, '不得泄露凭据名/值')
+})
+
+test('/qq-config：没有 webServer 时如实说明（不假装有页面）', async () => {
+  const env = await setup()
+  const { reply } = await run(env.control, '/qq-config')
+  assert.match(reply, /配置页不可用/)
+  assert.match(reply, /cordis\.patch\.yml/)
+})
+
+test('模型不可用自愈：清掉失效的显式选择，并在本次运行回退到 DSH 全局默认', async () => {
+  const env = await setup({
+    configOverrides: { agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'low' } },
+    ctxServices: {
+      agentDefaultModel: { currentSelection: () => ({ provider: 'deepseek-account', model: 'deepseek-flash', reasoningEffort: 'high' }) },
+    },
+  })
+  const chatKey = 'mock:acct:dm:u1'
+  await env.store.setSelection(chatKey, { model: 'deepseek-official/deepseek-flash', reasoning: 'low' })
+
+  // 自愈前：显式选择优先
+  assert.equal(env.control.defaultSelection().provider, 'deepseek-official')
+  assert.equal(env.store.chat(chatKey).model, 'deepseek-official/deepseek-flash')
+
+  // 缺凭据的失败 → 清显式选择 + 进程内跳过 agentOptions
+  const hint = await env.control.recoverFromModelFailure(chatKey, 'llm-deepseek: no API key for provider route "deepseek-official"')
+  assert.match(hint, /已回退到 DSH 全局默认/)
+  assert.equal(env.store.chat(chatKey).model, null, '失效的显式选择必须清掉')
+  assert.equal(env.control.defaultSelection().provider, 'deepseek-account', '应回退到 DSH 全局默认')
+  assert.equal(env.control.defaultSelection().reasoningEffort, 'high')
+})
+
+test('模型不可用自愈：无关的失败不动选择、不提示', async () => {
+  const env = await setup({ configOverrides: { agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash' } } })
+  const chatKey = 'mock:acct:dm:u1'
+  await env.store.setSelection(chatKey, { model: 'deepseek-official/deepseek-flash', reasoning: 'low' })
+  const hint = await env.control.recoverFromModelFailure(chatKey, 'prompt variable "{{model}}" has no value')
+  assert.equal(hint, null)
+  assert.equal(env.control.isModelUnavailable('prompt variable "{{model}}" has no value'), false)
+  assert.equal(env.control.defaultSelection().provider, 'deepseek-official', '不应触发回退')
+  assert.equal(env.store.chat(chatKey).model, 'deepseek-official/deepseek-flash')
+})
+
+test('ensureSelection 幂等：同一选择不重复安装、不重复写 model/selection', async () => {
+  const env = await setup({ configOverrides: { agentOptions: { provider: 'deepseek-account', model: 'deepseek-flash' } } })
+  const { agent } = await env.agents.create({ sessionId: 'qq-idem' })
+  const chatKey = 'mock:acct:dm:u1'
+  const first = env.control.ensureSelection(agent, chatKey)
+  const second = env.control.ensureSelection(agent, chatKey)
+  assert.equal(first, second, '同一选择应复用已安装条目')
+  const selectionEvents = agent.appended.filter(entry => entry.type === 'model/selection')
+  assert.equal(selectionEvents.length, 1, '不能每轮重复写事件')
 })

@@ -839,7 +839,7 @@ test('去重窗口/容量由配置驱动（dedupWindowMs / dedupMaxSize）', asy
   assert.equal(resolveConfig({ transport: 'qqbot', autoConnect: false }).dedupMaxSize, DEDUP_MAX_SIZE)
 })
 
-test('插件卸载/热重载：scope.dispose() 必须断开 WS（防旧实例继续收事件）', async t => {
+test('插件卸载/热重载：scope.dispose() 必须断开 WS（与 mock 同款泄漏防护）', async t => {
   const env = await setup()
   t.after(() => cleanup(env))
   assert.equal(await env.transport.start(), true)

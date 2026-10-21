@@ -64,7 +64,9 @@ test('真实 cordis：插件能装配、注册命令与渠道条目、卸载后�
     dataDir: dir,
   })
   assert.equal(typeof fiber?.dispose, 'function', '插件条目应可卸载')
-  assert.equal(registeredCommands.length, 15, '15 条 /qq-* 命令应注册到 ctx.commands')
+  // 用命令表长度断言，避免以后再加命令时到处改数字（之前写死 15，加 /qq-config 就炸了）
+  const { COMMAND_SPECS } = await import('../lib/control.js')
+  assert.equal(registeredCommands.length, COMMAND_SPECS.length, '全部 /qq-* 命令应注册到 ctx.commands')
   assert.ok(globalThis.__dshChannelNotify?.qq !== undefined, '渠道注册表应登记 qq 条目')
 
   // 经 ctx.plugin 挂载时，apply 拿到的是子上下文；fiber.ctx 指向它

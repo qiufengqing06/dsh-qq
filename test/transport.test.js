@@ -33,12 +33,12 @@ test('chatKey：命名空间隔离（协议 + 账号）', () => {
   const dm = { kind: 'dm', userId: 'openid-1' }
   assert.equal(buildChatKey('qqbot', '102000001', dm), 'qqbot:102000001:dm:openid-1')
   assert.equal(buildChatKey('qqbot', '102000002', dm), 'qqbot:102000002:dm:openid-1')
-  assert.equal(buildChatKey('altmock', '102000001', dm), 'altmock:102000001:dm:openid-1')
+  assert.equal(buildChatKey('mock', '102000001', dm), 'mock:102000001:dm:openid-1')
   // 同一 openid 在不同协议/账号下互不碰撞
   const keys = new Set([
     buildChatKey('qqbot', '1', dm),
     buildChatKey('qqbot', '2', dm),
-    buildChatKey('altmock', '1', dm),
+    buildChatKey('mock', '1', dm),
   ])
   assert.equal(keys.size, 3)
   assert.equal(buildChatKey('QQBot', '1', dm), 'qqbot:1:dm:openid-1')

@@ -129,3 +129,94 @@ test('chat 状态形状修复：缺字段的旧数据可加载', async () => {
   assert.deepEqual(reloaded.chat('broken').sessions, [])
   assert.equal(reloaded.chat('k').currentSessionId, 's1')
 })
+
+test('身份按 transport 隔离：一条线的主人不会在另一条线上被当成主人', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-store-id-'))
+  const store = createStore({ dir })
+  await store.load()
+
+  // 真机场景：个人线的 QQ 号 3298364424 是主人；官方线的 openid 是另一个人
+  await store.setHomeChannel('3298364424', 'mock')
+  await store.setHomeChannel('A6AB252127520117332879C06EE346AC', 'qqbot')
+
+  assert.equal(store.roleOf('3298364424', 'mock'), 'owner')
+  assert.equal(store.roleOf('A6AB252127520117332879C06EE346AC', 'qqbot'), 'owner')
+  // 关键回归：拿个人线的主人在官方线上判角色 → 不是主人（修复前这里是 owner，导致「我不就是管理？」被判陌生人/反过来也行不通）
+  assert.equal(store.roleOf('3298364424', 'qqbot'), 'everyone')
+  assert.equal(store.roleOf('A6AB252127520117332879C06EE346AC', 'mock'), 'everyone')
+})
+
+test('身份隔离：授权记录带 transport 前缀，只对来源线生效', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-store-auth-'))
+  const store = createStore({ dir })
+  await store.load()
+  await store.addAuthorized('2081371760', { role: 'authorized', transportKind: 'mock' })
+
+  assert.equal(store.roleOf('2081371760', 'mock'), 'authorized')
+  assert.equal(store.roleOf('2081371760', 'qqbot'), 'everyone')
+  assert.deepEqual(store.authorizedList('mock'), [{ id: '2081371760', role: 'authorized' }])
+  assert.deepEqual(store.authorizedList('qqbot'), [])
+  assert.equal(await store.removeAuthorized('2081371760', 'mock'), true)
+  assert.equal(store.roleOf('2081371760', 'mock'), 'everyone')
+})
+
+test('旧数据迁移：无前缀的 homeChannel/roles 归到 qqbot', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-store-mig-'))
+  // 模拟旧版 store：全局 homeChannel=QQ号，roles 也是裸 id。本仓库只有官方线，统一归 qqbot。
+  await writeFile(
+    join(dir, 'store.v1.json'),
+    JSON.stringify({
+      version: 1,
+      chats: {},
+      pairing: { policy: 'pairing', roles: { '2081371760': 'authorized', A6AB252127520117332879C06EE346AC: 'authorized' }, pending: [] },
+      meta: { homeChannel: '3298364424', accountId: '', updatedAt: 0 },
+    }),
+    'utf8',
+  )
+  const store = createStore({ dir })
+  await store.load()
+
+  const snapshot = store.snapshot()
+  assert.deepEqual(snapshot.meta.homeChannels, { qqbot: '3298364424' })
+  assert.equal(snapshot.pairing.roles['qqbot:2081371760'], 'authorized', '旧的无前缀记录归 qqbot')
+  assert.equal(snapshot.pairing.roles['qqbot:A6AB252127520117332879C06EE346AC'], 'authorized')
+  assert.equal(snapshot.pairing.roles['2081371760'], undefined, '旧的无前缀记录要迁走')
+  assert.equal(store.roleOf('3298364424', 'qqbot'), 'owner')
+  assert.equal(store.roleOf('A6AB252127520117332879C06EE346AC', 'qqbot'), 'authorized')
+})
+
+test('活动计数：按天按线路累加、近 7 天补零、重启后不丢', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-activity-'))
+  const store = createStore({ dir })
+  await store.load()
+
+  await store.recordActivity('qqbot')
+  await store.recordActivity('qqbot')
+  await store.recordActivity('qqbot')
+  await store.recordActivity('')  // 空 kind 忽略
+
+  const series = store.activity(7)
+  assert.equal(series.length, 7)
+  const today = series.at(-1)
+  assert.equal(typeof today.date, 'string')
+  assert.equal(today.qqbot, 3)
+  assert.equal(series[0].qqbot, 0, '没有活动的历史天补 0')
+
+  // 重启后仍在
+  const reloaded = createStore({ dir })
+  await reloaded.load()
+  assert.deepEqual(reloaded.activity(7).at(-1), today)
+})
+
+test('活动计数：超过保留天数的旧记录在写入时被裁掉', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-activity-prune-'))
+  const old = new Date(Date.now() - 60 * 86400_000)
+  const pad = value => String(value).padStart(2, '0')
+  const oldKey = `${old.getFullYear()}-${pad(old.getMonth() + 1)}-${pad(old.getDate())}`
+  await writeFile(join(dir, 'store.v1.json'), JSON.stringify({ version: 1, chats: {}, pairing: { policy: 'pairing', roles: {}, pending: [] }, meta: {}, activity: { [oldKey]: { qqbot: 5 } } }), 'utf8')
+  const store = createStore({ dir })
+  await store.load()
+  for (let index = 0; index < 40; index += 1) await store.recordActivity('qqbot')
+  assert.equal(store.snapshot().activity[oldKey], undefined, '60 天前的记录应被裁掉')
+  assert.ok(store.snapshot().activity[Object.keys(store.snapshot().activity)[0]].qqbot >= 1)
+})

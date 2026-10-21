@@ -150,3 +150,4 @@ test('看门狗：重连次数耗尽（disconnected）后服务恢复 → 自动
   const revived = await waitFor(() => plugin.transport.status().connected === true, 4000)
   assert.equal(revived, true, '看门狗应复活已耗尽的 transport')
 })
+

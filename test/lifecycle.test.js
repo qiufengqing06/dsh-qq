@@ -158,7 +158,7 @@ test('qqbot transport 缺凭据时降级运行，不阻塞插件加载', async (
 
 test('transport 模块不存在时降级为 unavailable（未知 transport 的出口）', async () => {
   // loader 表只登记已实现的 transport；这里直接验证降级实现本身的契约与行为
-  const unavailable = createUnavailableTransport('altmock', '模块加载失败：模拟')
+  const unavailable = createUnavailableTransport('mock', '模块加载失败：模拟')
   assert.equal(assertTransportContract(unavailable), true)
   assert.equal(unavailable.status().phase, 'unavailable')
   assert.equal(unavailable.status().connected, false)

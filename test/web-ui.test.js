@@ -297,7 +297,7 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
   assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
   assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'config', 'connections', 'credentials', 'fields', 'groups', 'identity', 'lines', 'mode', 'models', 'pagePath', 'paths', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'fields', 'groups', 'identity', 'lines', 'mode', 'models', 'pagePath', 'paths', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {
@@ -481,6 +481,36 @@ test('测试消息：按线路发送，校验空文本/目标', async () => {
   assert.equal(JSON.parse(empty.body).ok, false)
   const badTarget = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/test-message', headers: PANEL, body: { kind: 'mock', targetKind: 'group', targetId: '', text: 'x' } })
   assert.equal(JSON.parse(badTarget.body).ok, false)
+})
+
+test('会话提示词：state 透传 + POST 保存默认/按对话 + 校验', async () => {
+  const env = await setup()
+  await env.store.setDefaultPrompt('默认人设')
+
+  const state = (await call(env.webUi, { url: '/dsh-qq/api/state' })).json().state
+  assert.equal(state.prompt.default, '默认人设')
+  assert.equal(state.promptLimit, 4000)
+  assert.ok(Array.isArray(state.chatKeys))
+
+  const chat = await call(env.webUi, {
+    method: 'POST',
+    url: '/dsh-qq/api/prompts',
+    headers: PANEL,
+    body: { chatKey: 'qqbot:1905346673:dm:A6AB', text: '这个人是管理员' },
+  })
+  assert.equal(chat.code, 200, chat.body)
+  assert.equal(env.store.promptFor('qqbot:1905346673:dm:A6AB'), '这个人是管理员')
+
+  const def = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', headers: PANEL, body: { chatKey: '', text: '新默认' } })
+  assert.equal(def.code, 200)
+  assert.equal(env.store.defaultPrompt(), '新默认')
+
+  const badKey = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', headers: PANEL, body: { chatKey: 'not-a-chat-key', text: 'x' } })
+  assert.equal(JSON.parse(badKey.body).ok, false, '非法 chatKey 必须拒绝')
+  const tooLong = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', headers: PANEL, body: { chatKey: '', text: 'x'.repeat(4001) } })
+  assert.equal(JSON.parse(tooLong.body).ok, false, '超长必须拒绝')
+  const noHeader = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', body: { text: 'x' } })
+  assert.equal(noHeader.code, 403, '写操作需要 CSRF 头')
 })
 
 test('状态：pricing 与最近审批透传', async () => {

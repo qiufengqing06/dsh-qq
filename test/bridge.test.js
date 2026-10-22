@@ -266,14 +266,14 @@ test('P2：config.agentPreset 优先于默认 preset；解析失败则降级为�
   void logger
   await env2.bridge.handleUserMessage(env2.transport.injectText('hi'))
   assert.equal(env2.agents.created[0].meta.agentPreset, undefined)
-  assert.equal(env2.agents.created[0].setup, undefined)
+  assert.equal(typeof env2.agents.created[0].setup, 'function', 'preset 解析失败仍要挂提示词段')
 })
 
-test('P2：无 agentPresets 服务时创建裸会话（不传 preset/setup）', async () => {
+test('P2：无 agentPresets 服务时创建裸会话（只挂提示词，不传 preset）', async () => {
   const { bridge, transport, agents } = await setup()
   await bridge.handleUserMessage(transport.injectText('hi'))
   assert.equal(agents.created[0].meta.agentPreset, undefined)
-  assert.equal(agents.created[0].setup, undefined)
+  assert.equal(typeof agents.created[0].setup, 'function', '没有 preset 也要挂会话提示词')
 })
 
 test('P2：查询索引未命中但 resume 失败 → 回落新建（并记录原因）', async () => {
@@ -1201,4 +1201,29 @@ test('token 用量：assistant/message 的 usage 按对话记账（一轮多步�
   assert.equal(report.chats.length, 1)
   assert.match(report.chats[0].chatKey, /^mock:/, '归属到该对话的 chatKey')
   assert.equal(report.chats[0].turns, 2)
+})
+
+test('会话提示词：setup 注册动态 section，保存后下一回合立即生效', async () => {
+  const { bridge, transport, agents, store } = await setup({}, {}, { capabilities: { markdown: true } })
+  await bridge.handleUserMessage(transport.injectText('ping'))
+  const createdAgent = agents.created[0]
+  assert.equal(typeof createdAgent.setup, 'function', 'create 必须带 setup（挂 prompt section）')
+
+  const sections = []
+  const agentCtx = {
+    systemPrompt: {
+      section: section => { sections.push(section); return () => {} },
+      getSectionOrder: () => 100,
+    },
+  }
+  await createdAgent.setup(agentCtx, {})
+  assert.equal(sections.length, 1)
+  assert.equal(sections[0].name, 'dsh-qq:chat-prompt')
+  assert.equal(sections[0].text(), '', '未设置时不注入')
+
+  const chatKey = store.chatKeys()[0]
+  await store.setDefaultPrompt('你是群助手')
+  assert.equal(sections[0].text(), '你是群助手', '动态函数：默认值立即生效')
+  await store.setChatPrompt(chatKey, '这个群只聊技术')
+  assert.equal(sections[0].text(), '这个群只聊技术', '对话覆盖优先，且无需重建会话')
 })

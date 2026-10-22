@@ -328,3 +328,36 @@ test('微批写：并发记录合并落盘；flushSave 可立即刷盘', async (
   await third.load()
   assert.equal(third.homeChannel('qqbot'), 'owner-x', 'flushSave 必须立即刷盘')
 })
+
+// ── 会话 system prompt：默认 + 按对话覆盖 ──
+
+test('会话提示词：默认/按对话覆盖/清除/长度上限/重启不丢', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-prompt-'))
+  const store = createStore({ dir })
+  await store.load()
+  assert.equal(store.defaultPrompt(), '')
+  assert.equal(store.promptFor('qqbot:1:group:2'), '')
+  assert.deepEqual(store.promptChats(), {})
+
+  await store.setDefaultPrompt('你是群助手，回答简短。')
+  assert.equal(store.promptFor('qqbot:1:group:2'), '你是群助手，回答简短。')
+  await store.setChatPrompt('qqbot:1:group:2', '这个群只聊技术。')
+  assert.equal(store.promptFor('qqbot:1:group:2'), '这个群只聊技术。', '对话覆盖优先于默认')
+  assert.equal(store.promptFor('qqbot:1:dm:9'), '你是群助手，回答简短。', '其它对话回落到默认')
+  assert.deepEqual(store.promptChats(), { 'qqbot:1:group:2': '这个群只聊技术。' })
+
+  // 空文本 = 清除覆盖
+  await store.setChatPrompt('qqbot:1:group:2', '')
+  assert.equal(store.promptFor('qqbot:1:group:2'), '你是群助手，回答简短。')
+  assert.deepEqual(store.promptChats(), {})
+
+  await assert.rejects(() => store.setDefaultPrompt('x'.repeat(4001)), /太长/)
+  await assert.rejects(() => store.setChatPrompt('qqbot:1:group:2', 'x'.repeat(4001)), /太长/)
+  await assert.rejects(() => store.setChatPrompt('', 'x'), /不能为空/)
+
+  await store.setChatPrompt('qqbot:1:group:2', '持久化')
+  const reloaded = createStore({ dir })
+  await reloaded.load()
+  assert.equal(reloaded.defaultPrompt(), '你是群助手，回答简短。')
+  assert.equal(reloaded.promptFor('qqbot:1:group:2'), '持久化')
+})

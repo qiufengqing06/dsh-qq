@@ -419,6 +419,7 @@
       <a class="nav-item" href="#sec-cred" data-sec="sec-cred" title="登录与凭据"><span class="ico" data-icon="key"></span><span class="nav-label">登录与凭据</span></a>
       <a class="nav-item" href="#sec-identity" data-sec="sec-identity" title="身份与授权"><span class="ico" data-icon="user"></span><span class="nav-label">身份与授权</span><span class="nav-badge" id="badge-pending">–</span></a>
       <a class="nav-item" href="#sec-groups" data-sec="sec-groups" title="群记忆"><span class="ico" data-icon="book"></span><span class="nav-label">群记忆</span><span class="nav-badge" id="badge-groups">–</span></a>
+      <a class="nav-item" href="#sec-prompts" data-sec="sec-prompts" title="会话提示词"><span class="ico" data-icon="message"></span><span class="nav-label">会话提示词</span><span class="nav-badge" id="badge-prompts">–</span></a>
       <a class="nav-item" href="#sec-config" data-sec="sec-config" title="配置"><span class="ico" data-icon="sliders"></span><span class="nav-label">配置</span></a>
       <a class="nav-item" href="#sec-trend" data-sec="sec-trend" title="活动量"><span class="ico" data-icon="activity"></span><span class="nav-label">活动量</span></a>
       <a class="nav-item" href="#sec-usage" data-sec="sec-usage" title="Token 消耗"><span class="ico" data-icon="coins"></span><span class="nav-label">Token 消耗</span></a>
@@ -508,6 +509,11 @@
       <div id="groups"></div>
     </section>
 
+    <section class="card" id="sec-prompts">
+      <div class="card-head"><span class="ico" data-icon="message"></span><h2>会话提示词</h2><span class="right" id="prompts-note"></span></div>
+      <div id="prompts"></div>
+    </section>
+
     <section class="card" id="sec-config">
       <div class="card-head"><span class="ico" data-icon="sliders"></span><h2>配置</h2><span class="right" id="dirty-note"></span></div>
       <div class="cfg-grid" id="config"></div>
@@ -566,6 +572,7 @@
     terminal: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>',
     key: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M17 4l3 3M15 8l2 2"/></svg>',
     user: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>',
+    message: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-5.5A8 8 0 0 1 11 4h2a8 8 0 0 1 8 8Z"/><path d="M8 11h8M8 15h5"/></svg>',
     book: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 5.5v16"/><path d="M8 7h8M8 11h8"/></svg>',
     sliders: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h9M17 17h3"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="17" r="2"/></svg>',
     coins: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>',
@@ -1119,6 +1126,118 @@
     }).catch(function (error) { notice(String(error.message || error), 'bad'); });
   }
 
+  /* ---------- 会话提示词（默认 + 按对话覆盖）---------- */
+  var promptEditing = '';
+
+  /** chatKey → 可读标签（不依赖页面其它状态）。 */
+  function promptLabel(chatKey) {
+    var parts = String(chatKey || '').split(':');
+    var kind = parts[0] === 'qqbot' ? '官方线' : (parts[0] || '—');
+    var targetKind = parts[2];
+    var targetId = parts.slice(3).join(':');
+    if (targetKind === 'group') return { kind: kind, label: '群 ' + targetId };
+    if (targetKind === 'dm') return { kind: kind, label: '私聊 ' + targetId };
+    return { kind: kind, label: (targetKind || '对话') + ' ' + targetId };
+  }
+
+  function savePrompt(chatKey, text) {
+    api('/dsh-qq/api/prompts', { chatKey: chatKey, text: text }).then(function (res) {
+      if (res.data && res.data.ok === true) {
+        notice(chatKey === '' ? '默认提示词已保存（下一回合生效）' : '对话提示词已保存（下一回合生效）');
+        promptEditing = '';
+        load();
+      } else {
+        notice((res.data && res.data.error) || '保存失败', 'bad');
+      }
+    }).catch(function (error) { notice(String(error.message || error), 'bad'); });
+  }
+
+  function promptEditor(chatKey, current) {
+    var box = el('div', { className: 'group-editor' });
+    var textarea = el('textarea', { id: 'prompt-editor-text', placeholder: '留空并保存 = 清除（回落到默认）' });
+    textarea.value = current || '';
+    var count = el('span', { className: 'hint' });
+    var refresh = function () { count.textContent = textarea.value.length + ' / ' + (S.promptLimit || 4000) + ' 字'; };
+    textarea.addEventListener('input', refresh);
+    refresh();
+    box.appendChild(textarea);
+    box.appendChild(el('div', { className: 'row' }, [
+      count,
+      el('div', { className: 'hint', text: '只影响这个对话；保存后下一回合生效（不重建会话）' }),
+      btn('保存', 'primary sm', function () { savePrompt(chatKey, textarea.value); }),
+      btn('取消', 'quiet sm', function () { promptEditing = ''; renderPrompts(); })
+    ]));
+    return box;
+  }
+
+  function renderPrompts() {
+    var host = document.getElementById('prompts');
+    if (!host) return;
+    host.textContent = '';
+    var prompt = S.prompt || {};
+    var overrides = prompt.chats || {};
+    var defaultText = prompt.default || '';
+    var badge = document.getElementById('badge-prompts');
+    var overrideCount = Object.keys(overrides).length;
+    if (badge) badge.textContent = overrideCount === 0 ? '默认' : String(overrideCount);
+    var note = document.getElementById('prompts-note');
+    if (note) note.textContent = defaultText !== '' ? '默认已设置' : '默认跟随 DSH';
+
+    // 默认（bot 级）
+    host.appendChild(el('div', { className: 'group-row' }, [
+      el('div', { className: 'grow' }, [
+        el('div', { className: 'name', text: '默认（所有 QQ 对话）' }),
+        el('div', { className: 'sub', text: defaultText === '' ? '未设置：所有对话都只用 DSH 的默认人设' : defaultText.slice(0, 80) + (defaultText.length > 80 ? '…' : '') })
+      ]),
+      pill(defaultText === '' ? '未设置' : '已设置', defaultText === '' ? 'neutral' : 'ok', false),
+      btn('编辑', 'sm', function () { promptEditing = '@default'; renderPrompts(); }),
+      defaultText === '' ? null : btn('清除', 'quiet sm', function () { savePrompt('', ''); })
+    ]));
+    if (promptEditing === '@default') host.appendChild(promptEditor('@default', defaultText));
+
+    // 已知对话 + 已有覆盖的对话
+    var keys = [];
+    var seen = {};
+    (Array.isArray(S.chatKeys) ? S.chatKeys : []).forEach(function (key) { if (!seen[key]) { seen[key] = true; keys.push(key); } });
+    Object.keys(overrides).forEach(function (key) { if (!seen[key]) { seen[key] = true; keys.push(key); } });
+    var list = el('div', { style: 'margin-top:16px' });
+    list.appendChild(el('div', { className: 'usage-panel-title', text: '按对话设置' }));
+    if (keys.length === 0) {
+      list.appendChild(el('div', { className: 'empty', text: '还没有已知对话。给机器人发一条消息后，群/私聊会出现在这里；也可以手动填对话标识。' }));
+    } else {
+      keys.forEach(function (key) {
+        var info = promptLabel(key);
+        var own = overrides[key] || '';
+        list.appendChild(el('div', { className: 'group-row' }, [
+          el('div', { className: 'grow' }, [
+            el('div', { className: 'name', text: info.label }),
+            el('div', { className: 'sub mono', text: key })
+          ]),
+          el('span', { className: 'pill neutral', text: info.kind }),
+          pill(own === '' ? '跟随默认' : '已单独设置', own === '' ? 'neutral' : 'ok', false),
+          btn('编辑', 'sm', function () { promptEditing = key; renderPrompts(); }),
+          own === '' ? null : btn('清除', 'quiet sm', function () { savePrompt(key, ''); })
+        ]));
+        if (promptEditing === key) list.appendChild(promptEditor(key, own));
+      });
+    }
+    // 手动指定对话（还没聊过也能预设）
+    var manual = el('input', { type: 'text', placeholder: '手动输入对话标识，例如 qqbot:1905346673:group:A6AB…', style: 'margin-top:12px' });
+    list.appendChild(el('div', { className: 'actions', style: 'margin-top:10px' }, [
+      manual,
+      btn('为这个对话设置', 'quiet sm', function () {
+        var key = manual.value.trim();
+        if (key === '') { notice('先填对话标识', 'bad'); return; }
+        promptEditing = key;
+        renderPrompts();
+      })
+    ]));
+    host.appendChild(list);
+    if (promptEditing !== '' && promptEditing !== '@default' && keys.indexOf(promptEditing) === -1) {
+      host.appendChild(promptEditor(promptEditing, overrides[promptEditing] || ''));
+    }
+  }
+
   /* ---------- 测试消息 ---------- */
   function testMessageKinds() {
     return (Array.isArray(S.lines) ? S.lines : []).filter(function (line) { return line.enabled !== false; });
@@ -1533,6 +1652,7 @@
     renderCredentials();
     renderIdentity();
     renderGroups();
+    renderPrompts();
     renderConfig();
     renderActivity();
     renderReadonly();

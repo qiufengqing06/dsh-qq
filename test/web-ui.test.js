@@ -159,7 +159,17 @@ async function setup(overrides = {}) {
   const configEditor = overrides.configEditor === null ? null : createFakeConfigEditor()
   const credentials = overrides.credentials === null ? null : createFakeCredentials(overrides.credentials?.values ?? {})
   const control = overrides.control === null ? null : (overrides.control ?? createFakeControl())
-  const services = {}
+  const llm = overrides.llm ?? {
+    listConfigurableProviders: () => [
+      { provider: 'deepseek-account', displayName: 'DeepSeek（账号登录）' },
+      { provider: 'deepseek-official', displayName: 'DeepSeek 官方 API' },
+    ],
+    listModels: async provider => (provider === 'deepseek-account'
+      ? [{ id: 'deepseek-flash', name: 'DeepSeek Flash' }, { id: 'deepseek-pro', name: 'DeepSeek Pro' }]
+      : provider === 'deepseek-official' ? [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] : []),
+  }
+  const agentDefaultModel = overrides.agentDefaultModel ?? { currentSelection: () => ({ provider: 'deepseek-account', model: 'deepseek-flash' }) }
+  const services = { llm, agentDefaultModel }
   if (webServer !== null) services.webServer = webServer
   if (configEditor !== null) services.configEditor = configEditor
   if (credentials !== null) services.credentials = credentials
@@ -244,7 +254,11 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.equal(state.activity.length, 7, '活动序列固定 7 天')
   assert.equal(state.activity.every(day => day.qqbot === 0), true, '还没有活动计数时全为 0')
   assert.equal(state.alerts.enabled, true, '默认注入告警快照')
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'config', 'connections', 'credentials', 'fields', 'identity', 'lines', 'mode', 'pagePath', 'paths', 'routes', 'stats', 'status', 'transport', 'url', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  // 模型目录：页面用它渲染 provider/model 下拉（DSH 配了哪些就显示哪些）
+  assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
+  assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
+  assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'config', 'connections', 'credentials', 'fields', 'identity', 'lines', 'mode', 'models', 'pagePath', 'paths', 'routes', 'stats', 'status', 'transport', 'url', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {
@@ -365,4 +379,25 @@ test('状态 API：透传告警快照（页面告警条与事件列表用）', a
   assert.equal(state.alerts.active[0].kind, 'qqbot')
   assert.equal(state.alerts.events.length, 1)
   assert.equal(state.config.alerts.enabled, true)
+})
+
+
+test('模型目录：保存时校验 provider/model，非法值不落盘', async () => {
+  const env = await setup()
+  const badProvider = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/config`, headers: PANEL, body: { changes: { 'agentOptions.provider': 'no-such-provider' } } })
+  assert.equal(badProvider.code, 400)
+  assert.match(badProvider.json().error, /未知的 provider/)
+  const badModel = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/config`, headers: PANEL, body: { changes: { 'agentOptions.provider': 'deepseek-official', 'agentOptions.model': 'deepseek-flash' } } })
+  assert.equal(badModel.code, 400, '模型不属于该 provider 时应拒绝')
+  const ok = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/config`, headers: PANEL, body: { changes: { 'agentOptions.provider': 'deepseek-official', 'agentOptions.model': 'deepseek-chat' } } })
+  assert.equal(ok.code, 200)
+  assert.deepEqual(env.configEditor.saved.agentOptions, { provider: 'deepseek-official', model: 'deepseek-chat' })
+})
+
+test('模型目录：没有 llm 服务时退回纯文本，不拦配置', async () => {
+  const env = await setup({ llm: { listConfigurableProviders: () => [], listProviders: () => [], listModels: async () => [] }, agentDefaultModel: { currentSelection: () => null } })
+  const state = (await call(env.webUi, { url: `${PAGE_PATH}/api/state` })).json().state
+  assert.deepEqual(state.models, { providers: [], globalDefault: null })
+  const ok = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/config`, headers: PANEL, body: { changes: { 'agentOptions.provider': 'whatever', 'agentOptions.model': 'x' } } })
+  assert.equal(ok.code, 200, '目录不可用时不做 provider/model 校验')
 })

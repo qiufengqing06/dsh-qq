@@ -923,6 +923,63 @@
     if (Object.prototype.hasOwnProperty.call(dirty, field.path)) return dirty[field.path];
     return S.values[field.path];
   }
+  /** 模型目录（后端按 DSH 已配置的 provider/模型给出；缺失时返回 null）。 */
+  function modelCatalogOf() {
+    return S.models && Array.isArray(S.models.providers) && S.models.providers.length > 0 ? S.models : null;
+  }
+
+  /** 生成一个 option 节点。 */
+  function optionNode(value, label, selected) {
+    var option = el('option', { value: value, text: label });
+    if (selected) option.selected = true;
+    return option;
+  }
+
+  /** provider / model 的动态下拉（目录不可用时退回文本输入）。 */
+  function dynamicSelect(field, value) {
+    var catalog = modelCatalogOf();
+    if (catalog === null) return null;
+    var current = String(value === null || value === undefined ? '' : value);
+    var selectNode = el('select', {});
+    var global = catalog.globalDefault || null;
+    var globalText = global ? '（跟随 DSH 全局：' + global.provider + '/' + global.model + '）' : '（留空 / 跟随 DSH 全局）';
+    selectNode.appendChild(optionNode('', globalText, current === ''));
+    if (field.dynamic === 'provider') {
+      catalog.providers.forEach(function (provider) {
+        var label = provider.name && provider.name !== provider.id ? provider.name + '（' + provider.id + '）' : provider.id;
+        selectNode.appendChild(optionNode(provider.id, label, current === provider.id));
+      });
+    } else {
+      // 模型下拉跟着 provider 走：优先看用户刚改的 provider，其次看目录里的全局默认
+      var providerId = String(currentValue({ path: 'agentOptions.provider' }) || '').trim();
+      if (providerId === '' && global) providerId = global.provider;
+      var provider = catalog.providers.filter(function (entry) { return entry.id === providerId; })[0];
+      if (!provider) {
+        selectNode.disabled = true;
+        selectNode.appendChild(optionNode('', '先选 provider', true));
+        return selectNode;
+      }
+      provider.models.forEach(function (model) {
+        var label = model.name && model.name !== model.id ? model.name + '（' + model.id + '）' : model.id;
+        selectNode.appendChild(optionNode(model.id, label, current === model.id));
+      });
+    }
+    selectNode.addEventListener('change', function () {
+      setDirty(field.path, selectNode.value);
+      // provider 改了要刷新模型列表；旧模型不属于新 provider 时清掉，避免保存时被校验拦下
+      if (field.dynamic === 'provider') {
+        var catalogNow = modelCatalogOf();
+        var nextProvider = catalogNow ? catalogNow.providers.filter(function (entry) { return entry.id === selectNode.value; })[0] : null;
+        var currentModel = String(dirty['agentOptions.model'] !== undefined ? dirty['agentOptions.model'] : (S.values['agentOptions.model'] || ''));
+        if (nextProvider && currentModel !== '' && !nextProvider.models.some(function (model) { return model.id === currentModel; })) {
+          setDirty('agentOptions.model', '');
+        }
+        renderConfig();
+      }
+    });
+    return selectNode;
+  }
+
   function fieldNode(field) {
     var value = currentValue(field);
     if (field.type === 'boolean') {

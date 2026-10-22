@@ -63,7 +63,7 @@ else
 fi
 
 # 2) 顶层路径白名单
-allowed_top='^(lib|test|scripts|\.github|\.gitignore|LICENSE|NOTICE\.md|README\.md|package\.json|cordis\.patch\.yml)'
+allowed_top='^(lib|test|scripts|\.github|\.gitignore|LICENSE|NOTICE\.md|README\.md|CHANGELOG\.md|package\.json|cordis\.patch\.yml)'
 unexpected=$(printf '%s\n' "$files" | grep -vE "$allowed_top" || true)
 if [ -n "$unexpected" ]; then
   bad "出现白名单外的顶层路径："

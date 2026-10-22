@@ -125,6 +125,7 @@
   .top-fresh.err .dot { background:var(--negative); }
 
   /* ---------- cards ---------- */
+  section.card { scroll-margin-top: 90px; }
   .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-xl); box-shadow:var(--shadow-card); padding:18px 20px; }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
   .card-head { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
   .card-head h2 { font-size:17px; }
@@ -151,7 +152,6 @@
   .id-dot.ok { background:var(--positive); }
   .id-dot.bad { background:var(--negative); }
   .id-dot.warn { background:var(--warning); }
-
 
   /* ---------- stats ---------- */
   .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:var(--gap); }
@@ -469,32 +469,7 @@
 
     <div class="stats" id="stats"></div>
 
-    <section class="card" id="sec-trend">
-      <div class="card-head">
-        <span class="ico" data-icon="activity"></span>
-        <h2>活动量 · 近 7 天</h2>
-        <span class="right"><span id="trend-total"></span></span>
-      </div>
-      <div id="trend"></div>
-    </section>
-
-    <section class="card" id="sec-usage">
-      <div class="card-head">
-        <span class="ico" data-icon="coins"></span>
-        <h2>Token 消耗</h2>
-        <span class="right" style="gap:14px">
-          <span id="usage-note"></span>
-          <span class="seg" id="usage-range">
-            <button type="button" data-range="today">今日</button>
-            <button type="button" data-range="week">近 7 天</button>
-            <button type="button" class="active" data-range="month">近 30 天</button>
-          </span>
-        </span>
-      </div>
-      <div id="usage"></div>
-    </section>
-
-    <section class="card" id="sec-cred">
+            <section class="card" id="sec-cred">
       <div class="card-head"><span class="ico" data-icon="key"></span><h2>登录与凭据</h2><span class="right">只写不回显</span></div>
       <div id="credentials"></div>
     </section>
@@ -526,7 +501,32 @@
     </section>
 
     <div class="grid-2 equal">
-      <section class="card" id="sec-activity">
+    <section class="card" id="sec-trend">
+        <div class="card-head">
+          <span class="ico" data-icon="activity"></span>
+          <h2>活动量 · 近 7 天</h2>
+          <span class="right"><span id="trend-total"></span></span>
+        </div>
+        <div id="trend"></div>
+      </section>
+
+  <section class="card" id="sec-usage">
+        <div class="card-head">
+          <span class="ico" data-icon="coins"></span>
+          <h2>Token 消耗</h2>
+          <span class="right" style="gap:14px">
+            <span id="usage-note"></span>
+            <span class="seg" id="usage-range">
+              <button type="button" data-range="today">今日</button>
+              <button type="button" data-range="week">近 7 天</button>
+              <button type="button" class="active" data-range="month">近 30 天</button>
+            </span>
+          </span>
+        </div>
+        <div id="usage"></div>
+      </section>
+
+    <section class="card" id="sec-activity">
         <div class="card-head"><span class="ico" data-icon="activity"></span><h2>最近活动</h2><span class="right" id="activity-note"></span></div>
         <div id="activity"></div>
       </section>
@@ -692,15 +692,22 @@
   /* ---------- nav scroll spy ---------- */
   function initNav() {
     var items = Array.prototype.slice.call(document.querySelectorAll('.nav-item'));
-    var pairs = items.map(function (item) { return { item: item, sec: document.getElementById(item.getAttribute('data-sec')) }; }).filter(function (pair) { return pair.sec !== null; });
+    // 关键：按**文档位置**而不是导航顺序判定。导航顺序与 DOM 顺序一旦不一致（例如卡片被移动），
+    // 按导航顺序取「最后一个 top<=阈值」会把高亮错配到别的段落（历史上正是 Token 消耗）。
+    var pairs = items
+      .map(function (item) { return { item: item, sec: document.getElementById(item.getAttribute('data-sec')) }; })
+      .filter(function (pair) { return pair.sec !== null; })
+      .sort(function (a, b) { return a.sec.offsetTop - b.sec.offsetTop; });
     var ticking = false;
     function update() {
       ticking = false;
       var threshold = 150;
+      var atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
       var active = pairs[0];
       pairs.forEach(function (pair) {
         if (pair.sec.getBoundingClientRect().top <= threshold) active = pair;
       });
+      if (atBottom) active = pairs[pairs.length - 1];
       pairs.forEach(function (pair) { pair.item.classList.toggle('active', pair.item === active.item); });
     }
     function onScroll() {

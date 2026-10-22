@@ -3,6 +3,7 @@ import { test } from 'node:test'
 
 import {
   assertTarget,
+  chunkText,
   assertTransportContract,
   buildChatKey,
   createUnavailableTransport,
@@ -142,4 +143,18 @@ test('降级 transport 如实报错且状态可读', async () => {
   const sent = await transport.sendText({ kind: 'dm', userId: 'u' }, 'hi')
   assert.equal(sent.ok, false)
   assert.match(sent.error, /不可用/)
+})
+
+test('chunkText：不劈开代理对（emoji），limit 非法时抛错', () => {
+  // 每个 emoji 占 2 个 UTF-16 码元：limit=5 时切点若落在代理对中间会出乱码
+  const text = '😀😀😀😀😀😀'
+  const chunks = chunkText(text, 5)
+  for (const chunk of chunks) {
+    assert.doesNotThrow(() => new TextDecoder('utf-8', { fatal: true }).decode(new TextEncoder().encode(chunk)), '每段必须是合法 UTF-16↔UTF-8')
+    assert.equal(/[\uD800-\uDBFF]$/.test(chunk), false, '段尾不能是孤立高代理')
+    assert.equal(/^[\uDC00-\uDFFF]/.test(chunk), false, '段首不能是孤立低代理')
+  }
+  assert.equal(chunks.join(''), text, '拼回去必须等于原文')
+  assert.throws(() => chunkText('x', 0), /positive integer/)
+  assert.throws(() => chunkText('x', -3), /positive integer/)
 })

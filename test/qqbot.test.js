@@ -887,3 +887,27 @@ test('getProfile：接口失败（404/500）时返回 null，不抛错', async t
   await tick(20)
   assert.equal(await env.transport.getProfile(), null)
 })
+
+test('op 9（invalid session）：走会话重置而不是致命关闭，能自动重连', async t => {
+  const env = await setup({ deps: { backoffMs: [20] } })
+  t.after(() => cleanup(env))
+  await env.transport.start()
+  await tick(40)
+  assert.equal(env.transport.status().connected, true)
+  // 服务端下发 op 9：要求客户端 invalid session（重新 identify）
+  const socket = env.server.currentSocket()
+  assert.notEqual(socket, null)
+  socket.push({ op: 9, d: false })
+
+  const deadline = Date.now() + 3000
+  const reconnected = await (async () => {
+    while (Date.now() < deadline) {
+      const next = env.server.currentSocket()
+      if (next !== null && next !== socket && env.transport.status().connected === true) return true
+      await tick(20)
+    }
+    return false
+  })()
+  assert.equal(reconnected, true, 'op 9 后应重新连接（不能停在 fatal）')
+  assert.notEqual(env.transport.status().phase, 'fatal', 'op 9 不是致命错误')
+})

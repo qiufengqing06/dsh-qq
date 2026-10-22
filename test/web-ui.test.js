@@ -228,6 +228,21 @@ test('页面：自包含 HTML（无外部资源），含线路/凭据/身份/配
   assert.equal(/<script[^>]+src=|<link[^>]+rel=["']stylesheet/i.test(res.body), false, '不得外链脚本/样式')
 })
 
+test('配置写入：身份与权限字段（pairingPolicy / controlPolicy）可保存', async () => {
+  const env = await setup()
+  env.configEditor.current = { transport: 'qqbot' }
+  const res = await call(env.webUi, {
+    method: 'POST',
+    url: '/dsh-qq/api/config',
+    headers: PANEL,
+    body: { changes: { pairingPolicy: 'allowlist', 'controlPolicy.chat': 'authorized', 'controlPolicy.approvals': 'admin' } },
+  })
+  assert.equal(res.code, 200, res.body)
+  assert.equal(env.configEditor.saved.pairingPolicy, 'allowlist')
+  assert.equal(env.configEditor.saved.controlPolicy.chat, 'authorized')
+  assert.equal(env.configEditor.saved.controlPolicy.approvals, 'admin')
+})
+
 test('页面内联脚本必须能解析（历史上一次换行转义写坏，导致整页空白）', async () => {
   const env = await setup()
   const res = await call(env.webUi, { url: PAGE_PATH })

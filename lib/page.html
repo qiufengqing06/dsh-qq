@@ -254,7 +254,12 @@
   tr:last-child td { border-bottom:none; }
   th.right, td.right { text-align:right; padding-right:0; }
   .empty { padding:20px 16px; color:var(--muted); font-size:12.5px; text-align:center; border:1px dashed var(--border); border-radius:14px; background:color-mix(in srgb, var(--surface-2) 70%, transparent); }
-  .cfg-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .cfg-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .line-toggles { margin-top:16px; display:flex; flex-direction:column; gap:10px; }
+  .line-toggle { display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); }
+  .line-toggle .grow { flex:1; min-width:0; }
+  .line-toggle .name { font-size:13px; }
+  .line-toggle .sub { font-size:11.5px; color:var(--muted); margin-top:2px; }
   .cfg-col { padding:14px; border-radius:16px; border:1px solid var(--border); background:var(--surface-2); }
   .cfg-title { font-size:13.5px; font-weight:600; }
   .cfg-desc { font-size:12px; color:var(--muted); margin:4px 0 14px; min-height:32px; }
@@ -324,6 +329,7 @@
 
   /* ---------- responsive ---------- */
   @media (max-width:1180px) { .stats { grid-template-columns:repeat(2,1fr); } .cfg-grid { grid-template-columns:1fr 1fr; } .usage-kpis { grid-template-columns:1fr 1fr; } .usage-grid { grid-template-columns:1fr; } }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
   @media (max-width:1020px) {
     .app { grid-template-columns:1fr; }
     .sidebar { position:sticky; top:0; z-index:20; height:auto; flex-direction:row; align-items:center; gap:10px; padding:12px 16px; background:color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--border); }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
@@ -408,8 +414,8 @@
       <button class="btn quiet sm" id="refresh" type="button">刷新</button>
     </div>
 
-    <div class="alertbar" id="alertbar" hidden></div>
-    <div class="notice" id="notice"></div>
+    <div class="alertbar" id="alertbar" role="status" aria-live="polite" hidden></div>
+    <div class="notice" id="notice" role="status" aria-live="polite"></div>
     <div class="nudge" id="nudge" hidden>
       <div class="nudge-text"><strong id="nudge-title"></strong><span class="nudge-why" id="nudge-why"></span></div>
       <div class="actions" id="nudge-actions"></div>
@@ -475,6 +481,7 @@
     <section class="card" id="sec-config">
       <div class="card-head"><span class="ico" data-icon="sliders"></span><h2>配置</h2><span class="right" id="dirty-note"></span></div>
       <div class="cfg-grid" id="config"></div>
+      <div class="line-toggles" id="line-toggles"></div>
       <div class="savebar" id="savebar" hidden>
         <span class="txt" id="dirty-text"></span>
         <button class="btn" id="discard" type="button">放弃</button>
@@ -788,7 +795,7 @@
     var today = 0;
     if (Array.isArray(S.activity) && S.activity.length > 0) today = S.activity[S.activity.length - 1].qqbot || 0;
     host.appendChild(stat('在线线路', connected + ' / ' + lines.length, connected === lines.length ? '全部在线' : '线路离线', connected === lines.length ? 'hl' : ''));
-    host.appendChild(stat('DSH 会话', chats, '个', today > 0 ? '今日 ' + today + ' 条消息' : (activity > 0 ? '最近活动 ' + activity + ' 个对话' : '还没有对话')));
+    host.appendChild(stat('DSH 会话', chats, '个', today > 0 ? '今日收到 ' + today + ' 条' : (activity > 0 ? '最近活动 ' + activity + ' 个对话' : '还没有对话')));
     host.appendChild(stat('待批配对', pending, '条', pending > 0 ? '需要你处理' : '没有积压'));
     host.appendChild(stat('已授权用户', auths, '人', auths > 0 ? '主人 + 已授权' : '还没有授权'));
   }
@@ -968,9 +975,10 @@
     var host = document.getElementById('config');
     host.textContent = '';
     var groups = [
-      { id: 'chat', title: '连接与群聊', desc: 'WS 地址、限速、群里何时回复。' },
-      { id: 'model', title: '模型与群记忆', desc: '渠道默认模型（留空跟随 DSH 全局）与群记忆容量。' },
-      { id: 'advanced', title: '高级', desc: '在途/文件上限、掉线提醒阈值。' }
+      { id: 'identity', title: '身份与权限', desc: '陌生人策略、谁能对话、谁能用命令——安全相关的都放最前。' },
+      { id: 'chat', title: '连接与群聊', desc: '群聊策略与 Markdown 渲染。' },
+      { id: 'model', title: '模型与语音', desc: '渠道默认模型（留空跟随 DSH 全局）、群记忆容量、外部语音转写。' },
+      { id: 'advanced', title: '高级', desc: '自动连接、工作目录、各类超时与上限。' }
     ];
     groups.forEach(function (group) {
       var block = el('div', { className: 'cfg-col' });
@@ -981,8 +989,45 @@
       block.appendChild(fields);
       host.appendChild(block);
     });
+    renderLineToggles();
     updateSavebar();
   }
+
+  /** 线路启停：配置页里直接启用/停用某条线（写 transports 数组，保存后热重载）。 */
+  function renderLineToggles() {
+    var host = document.getElementById('line-toggles');
+    if (!host) return;
+    host.textContent = '';
+    var specs = S.config && Array.isArray(S.config.transports) ? S.config.transports : [];
+    if (specs.length === 0) return;
+    var labels = { qqbot: '官方 QQBot', mock: 'Mock（调试）' };
+    specs.forEach(function (spec) {
+      var enabled = spec.enabled !== false;
+      var input = el('input', { type: 'checkbox', checked: enabled });
+      var remaining = specs.filter(function (other) { return other.kind !== spec.kind && other.enabled !== false; }).length;
+      input.addEventListener('change', function () {
+        if (!input.checked && remaining === 0) {
+          input.checked = true;
+          notice('至少保留一条启用中的线路（全关掉插件就没有通道了）');
+          return;
+        }
+        var next = specs.map(function (other) {
+          return other.kind === spec.kind
+            ? { kind: other.kind, ...(other.accountId === undefined || other.accountId === '' ? {} : { accountId: other.accountId }), enabled: input.checked }
+            : { kind: other.kind, ...(other.accountId === undefined || other.accountId === '' ? {} : { accountId: other.accountId }), enabled: other.enabled !== false };
+        });
+        saveConfig({ transports: next });
+      });
+      host.appendChild(el('div', { className: 'line-toggle' }, [
+        el('div', { className: 'grow' }, [
+          el('div', { className: 'name', text: labels[spec.kind] || spec.kind }),
+          el('div', { className: 'sub', text: enabled ? '启用中 · 保存后热重载生效' : '已停用 · 打开开关即保存' })
+        ]),
+        el('div', { className: 'switch' }, [input, el('span')])
+      ]));
+    });
+  }
+
   function currentValue(field) {
     if (Object.prototype.hasOwnProperty.call(dirty, field.path)) return dirty[field.path];
     return S.values[field.path];
@@ -1324,8 +1369,15 @@
       dirty = {};
       updateSavebar();
       notice('已保存，插件正在热重载…', 'info');
-      setTimeout(load, 1200);
-      setTimeout(load, 3500);
+      var baseVersion = S && S.version ? S.version : '';
+      var startedAt = Date.now();
+      var poll = function () {
+        load().then(function () {
+          var changed = S && S.version && S.version !== baseVersion;
+          if (!changed && Date.now() - startedAt < 8000) setTimeout(poll, 700);
+        });
+      };
+      setTimeout(poll, 600);
     }).catch(function (error) { notice('保存失败：' + error.message, ''); });
   }
   function saveCredentials(payload) {
@@ -1392,7 +1444,13 @@
     render();
   });
   load();
-  setInterval(function () { if (Object.keys(dirty).length === 0) load(); }, 5000);
+  // 轮询策略：后台标签页不轮询；用户正在输入时不重建 DOM（否则输入内容会被清掉）
+  setInterval(function () {
+    if (document.hidden) return;
+    var active = document.activeElement;
+    if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
+    if (Object.keys(dirty).length === 0) load();
+  }, 5000);
 })();
 </script>
 </body>

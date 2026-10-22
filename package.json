@@ -1,6 +1,6 @@
 {
   "name": "dsh-qq",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "description": "QQ 渠道插件：官方 QQBot 扫码/凭据登录，QQ ↔ DSH 会话双向消息、Web 控制台、远程控制与审批（de_channel_send channels=qq）",
   "type": "module",
   "main": "lib/index.js",
@@ -47,5 +47,18 @@
       "inject": [],
       "platform": "web"
     }
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qiufengqing06/dsh-qq.git"
+  },
+  "homepage": "https://github.com/qiufengqing06/dsh-qq",
+  "bugs": {
+    "url": "https://github.com/qiufengqing06/dsh-qq/issues"
+  },
+  "author": "qiufengqing06",
+  "publishConfig": {
+    "access": "public"
+  },
+  "private": true
 }

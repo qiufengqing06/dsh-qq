@@ -307,3 +307,24 @@ test('审批历史：记录允许/拒绝，非法决策忽略，容量封顶 50'
   assert.equal(reloaded.approvalsRecent(100).length, 50)
   assert.equal(reloaded.approvalsRecent()[0].summary, '第 59 条')
 })
+
+// ── 微批写：并发 save 合并，flushSave 立即刷盘 ──
+
+test('微批写：并发记录合并落盘；flushSave 可立即刷盘', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-batch-'))
+  const store = createStore({ dir })
+  await store.load()
+  await Promise.all(Array.from({ length: 20 }, () => store.recordActivity('qqbot')))
+  assert.equal(store.activity(1).at(-1).qqbot, 20, '内存计数正确')
+
+  // await 返回时同一批已经落盘：新实例能读到
+  const reloaded = createStore({ dir })
+  await reloaded.load()
+  assert.equal(reloaded.activity(1).at(-1).qqbot, 20)
+
+  await store.setHomeChannel('owner-x', 'qqbot')
+  await store.flushSave()
+  const third = createStore({ dir })
+  await third.load()
+  assert.equal(third.homeChannel('qqbot'), 'owner-x', 'flushSave 必须立即刷盘')
+})

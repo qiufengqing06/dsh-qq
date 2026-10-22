@@ -1094,7 +1094,8 @@
       var count = document.getElementById('group-editor-count');
       var refresh = function () { if (count) count.textContent = textarea.value.length + ' 字'; };
       textarea.addEventListener('input', refresh);
-      api('/dsh-qq/api/groups/note?file=' + encodeURIComponent(editingGroupFile), {}).then(function (res) {
+      // 注意：api(path) 才是 GET；传第二个参数会变成 POST（打开编辑器曾因此报「文件名不合法」）
+      api('/dsh-qq/api/groups/note?file=' + encodeURIComponent(editingGroupFile)).then(function (res) {
         if (res.data && res.data.ok === true) { textarea.value = String(res.data.text ?? ''); refresh(); }
         else textarea.placeholder = (res.data && res.data.error) || '读取失败';
       }).catch(function (error) { textarea.placeholder = String(error.message || error); });

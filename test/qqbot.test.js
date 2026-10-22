@@ -851,3 +851,39 @@ test('插件卸载/热重载：scope.dispose() 必须断开 WS（与 mock 同款
   while (Date.now() < deadline && env.server.state.sockets.size > 0) await tick(20)
   assert.equal(env.server.state.sockets.size, 0, 'scope 释放后假 QQ 服务侧不该再有连接')
 })
+
+// ── 机器人资料（昵称 + 头像）：控制台把官方线显示成头像+昵称 ──
+
+test('getProfile：返回昵称与头像（GET /users/@me），失败时返回 null', async t => {
+  const env = await setup()
+  t.after(() => cleanup(env))
+  env.server.setRestResponse('/users/@me', {
+    status: 200,
+    body: {
+      id: '201741409652153322',
+      username: '小Q',
+      avatar: 'http://thirdqq.qlogo.cn/g?b=oidb&k=abc&s=0',
+    },
+  })
+  await env.transport.start()
+  await tick(20)
+
+  const profile = await env.transport.getProfile()
+  assert.deepEqual(profile, { id: '201741409652153322', name: '小Q', avatar: 'http://thirdqq.qlogo.cn/g?b=oidb&k=abc&s=0' })
+  const rest = env.server.state.rest.filter(entry => entry.path === '/users/@me')
+  assert.equal(rest.length, 1, '只请求一次')
+  assert.match(rest[0].headers.authorization ?? rest[0].headers.Authorization ?? '', /^QQBot /)
+
+  // 缓存：5 分钟内不重复请求
+  await env.transport.getProfile()
+  assert.equal(env.server.state.rest.filter(entry => entry.path === '/users/@me').length, 1)
+})
+
+test('getProfile：接口失败（404/500）时返回 null，不抛错', async t => {
+  const env = await setup()
+  t.after(() => cleanup(env))
+  env.server.setRestResponse('/users/@me', { status: 500, body: { message: 'boom' } })
+  await env.transport.start()
+  await tick(20)
+  assert.equal(await env.transport.getProfile(), null)
+})

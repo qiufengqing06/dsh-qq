@@ -209,6 +209,14 @@ export async function startFakeQQServer({ heartbeatIntervalMs = 100, failToken =
     if (req.method === 'POST' && /^\/channels\/[^/]+\/messages$/.test(url.pathname)) {
       return finish(true, { id: `ch-${state.rest.length + 1}`, timestamp: Date.now() })
     }
+    if (req.method === 'GET' && url.pathname === '/users/@me') {
+      // 机器人资料（昵称 + 头像）：控制台头像/昵称渲染用
+      return finish(true, {
+        id: 'bot-openid-1',
+        username: '测试机器人',
+        avatar: 'http://thirdqq.qlogo.cn/g?b=oidb&k=test&s=0',
+      })
+    }
     if (req.method === 'PUT' && /^\/interactions\/[^/]+$/.test(url.pathname)) {
       return finish(true, {})
     }

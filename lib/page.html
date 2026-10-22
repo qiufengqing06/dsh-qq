@@ -609,8 +609,20 @@
   }
 
   /* ---------- ids / hero ---------- */
-  function avatarNode(text) {
-    return el('div', { className: 'avatar', text: text || '官' });
+  /**
+   * 官方线头像：用机器人资料里的头像（GET /users/@me），没有就退回文字占位。
+   * @param {string} fallbackText
+   * @param {object|null} [profile] - {name, avatar}
+   */
+  function avatarNode(fallbackText, profile) {
+    var node = el('div', { className: 'avatar', text: fallbackText || '官' });
+    if (profile && typeof profile.avatar === 'string' && profile.avatar !== '') {
+      var img = el('img', { src: profile.avatar, alt: (profile.name || fallbackText || '机器人头像'), referrerpolicy: 'no-referrer' });
+      img.addEventListener('error', function () { node.textContent = fallbackText || '官'; });
+      node.textContent = '';
+      node.appendChild(img);
+    }
+    return node;
   }
 
   function renderTop() {
@@ -620,10 +632,11 @@
     if (line && line.enabled) {
       var state = lineState(line);
       var accountId = line.status && line.status.accountId ? line.status.accountId : '';
+      var profile = line.profile || null;
       meta.appendChild(el('div', { className: 'id-card' }, [
-        avatarNode('官'),
+        avatarNode('官', profile),
         el('div', {}, [
-          el('div', { className: 'id-name', text: '官方 QQBot' }),
+          el('div', { className: 'id-name', text: (profile && profile.name) || '官方 QQBot' }),
           el('div', { className: 'id-meta', text: accountId ? 'AppID ' + accountId : '账号未知' })
         ]),
         el('span', { className: 'id-dot ' + (state.kind === 'ok' ? 'ok' : state.kind === 'bad' ? 'bad' : state.kind === 'warn' ? 'warn' : '') })
@@ -799,12 +812,13 @@
       if (connected) actions.appendChild(btn('扫码换号', 'quiet sm', function () { doAction('login'); }));
     }
     var state = lineState(line);
+    var profile = line.profile || null;
     return el('div', { className: 'chain' }, [
       el('div', { className: 'line-id' }, [
-        el('div', { className: 'line-avatar', text: '官' }),
+        el('div', { className: 'line-avatar' }, [avatarNode('官', profile)]),
         el('div', { style: 'min-width:0' }, [
-          el('div', { className: 'line-name', text: line.label }),
-          el('div', { className: 'line-sub', text: !line.enabled ? 'transports 里未启用' : (accountId ? 'AppID ' + accountId : '账号未知') }),
+          el('div', { className: 'line-name', text: (profile && profile.name) || line.label }),
+          el('div', { className: 'line-sub', text: !line.enabled ? 'transports 里未启用' : (accountId ? (profile && profile.name ? '官方 QQBot · AppID ' : 'AppID ') + accountId : '账号未知') }),
           el('div', { className: 'line-state' }, [pill(state.text, state.kind)])
         ])
       ]),

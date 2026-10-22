@@ -176,6 +176,10 @@ async function setup(overrides = {}) {
   const ctx = createCtx(services)
   const logger = createLogger()
   const transport = {
+    // 机器人资料：官方线用它在页面显示昵称 + 头像（走注册表 entries，与生产装配一致）
+    entries: overrides.getProfile === null
+      ? []
+      : [{ kind: 'qqbot', transport: { getProfile: overrides.getProfile ?? (async () => ({ id: 'bot-openid-1', name: '小Q', avatar: 'http://thirdqq.qlogo.cn/g?b=oidb&k=test&s=0' })) } }],
     status: () => ({
       connected: true,
       phase: 'connected',
@@ -244,6 +248,7 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.equal(state.transport, 'qqbot')
   assert.equal(state.routes.qqbot.enabled, true)
   assert.equal(state.routes.qqbot.label, '官方 QQBot')
+  assert.deepEqual(state.routes.qqbot.profile, { id: 'bot-openid-1', name: '小Q', avatar: 'http://thirdqq.qlogo.cn/g?b=oidb&k=test&s=0' }, '官方线带上机器人昵称/头像')
   assert.deepEqual(Object.keys(state.routes), ['qqbot'], '公开仓库只有官方线一条线路')
   assert.equal(state.identity.homeChannels.qqbot, '')
   assert.deepEqual(state.identity.pending, [])

@@ -177,6 +177,10 @@ async function setup(overrides = {}) {
   const logger = createLogger()
   const transport = {
     // 机器人资料：官方线用它在页面显示昵称 + 头像（走注册表 entries，与生产装配一致）
+    sentTestMessages: [],
+    forKind: kind => (kind === 'mock' || kind === 'qqbot'
+      ? { sendText: async (target, text) => { transport.sentTestMessages.push({ target, text }); return { ok: true, messageId: 'tm-1' } } }
+      : null),
     entries: overrides.getProfile === null
       ? []
       : [{ kind: 'qqbot', transport: { getProfile: overrides.getProfile ?? (async () => ({ id: 'bot-openid-1', name: '小Q', avatar: 'http://thirdqq.qlogo.cn/g?b=oidb&k=test&s=0' })) } }],
@@ -193,8 +197,20 @@ async function setup(overrides = {}) {
     }),
   }
   const alerts = overrides.alerts === null ? null : (overrides.alerts ?? { snapshot: () => ({ enabled: true, notify: true, active: [], events: [], pending: 0 }) })
-  const webUi = createWebUi({ ctx, config, store, transport, control, alerts, logger })
-  return { dir, config, store, webServer, configEditor, credentials, control, alerts, ctx, logger, transport, webUi }
+  const groupMemory = overrides.groupMemory ?? {
+    listNotes: async () => [{ file: 'qqbot_1_group_90001.md', chars: 12, updatedAt: 1_700_000_000_000 }],
+    readNoteFile: async file => (file === 'qqbot_1_group_90001.md'
+      ? { ok: true, text: '# 群记忆\n- 老板\n', chars: 16 }
+      : { ok: false, error: '笔记不存在或读取失败' }),
+    writeNoteFile: async (file, text) => {
+      groupMemory.writes.push({ file, text })
+      return { ok: true, chars: String(text ?? '').length }
+    },
+    writes: [],
+  }
+  const webUi = createWebUi({ ctx, config, store, transport, control, alerts, groupMemory, logger })
+  transport.sentTestMessages = []
+  return { dir, config, store, webServer, configEditor, credentials, control, alerts, groupMemory, ctx, logger, transport, webUi }
 }
 
 test('注册：作为 webServer 的 prefix 路由挂到 /dsh-qq，url() 给出完整地址', async () => {
@@ -281,7 +297,7 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
   assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
   assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'config', 'connections', 'credentials', 'fields', 'identity', 'lines', 'mode', 'models', 'pagePath', 'paths', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'config', 'connections', 'credentials', 'fields', 'groups', 'identity', 'lines', 'mode', 'models', 'pagePath', 'paths', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {
@@ -423,4 +439,55 @@ test('模型目录：没有 llm 服务时退回纯文本，不拦配置', async 
   assert.deepEqual(state.models, { providers: [], globalDefault: null })
   const ok = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/config`, headers: PANEL, body: { changes: { 'agentOptions.provider': 'whatever', 'agentOptions.model': 'x' } } })
   assert.equal(ok.code, 200, '目录不可用时不做 provider/model 校验')
+})
+
+// ── 群记忆编辑 ──
+
+test('群记忆：state 带笔记列表；GET 正文 / POST 保存走群记忆模块', async () => {
+  const env = await setup()
+  const state = (await call(env.webUi, { url: '/dsh-qq/api/state' })).json().state
+  assert.deepEqual(state.groups, [{ file: 'qqbot_1_group_90001.md', chars: 12, updatedAt: 1_700_000_000_000 }])
+
+  const read = await call(env.webUi, { url: '/dsh-qq/api/groups/note?file=qqbot_1_group_90001.md' })
+  assert.equal(read.code, 200)
+  assert.match(JSON.parse(read.body).text, /老板/)
+  const traversal = await call(env.webUi, { url: '/dsh-qq/api/groups/note?file=../../etc/passwd' })
+  assert.equal(traversal.code, 400, '路径穿越必须拒绝')
+
+  const write = await call(env.webUi, {
+    method: 'POST',
+    url: '/dsh-qq/api/groups/note',
+    headers: PANEL,
+    body: { file: 'qqbot_1_group_90001.md', text: '# 新内容\n' },
+  })
+  assert.equal(write.code, 200, write.body)
+  assert.deepEqual(env.groupMemory.writes, [{ file: 'qqbot_1_group_90001.md', text: '# 新内容\n' }])
+})
+
+// ── 测试消息 ──
+
+test('测试消息：按线路发送，校验空文本/目标', async () => {
+  const env = await setup()
+  const ok = await call(env.webUi, {
+    method: 'POST',
+    url: '/dsh-qq/api/test-message',
+    headers: PANEL,
+    body: { kind: 'mock', targetKind: 'group', targetId: '90001', text: 'ping' },
+  })
+  assert.equal(ok.code, 200, ok.body)
+  assert.equal(JSON.parse(ok.body).messageId, 'tm-1')
+  assert.deepEqual(env.transport.sentTestMessages, [{ target: { kind: 'group', groupId: '90001' }, text: 'ping' }])
+  const empty = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/test-message', headers: PANEL, body: { kind: 'mock', targetKind: 'group', targetId: '1', text: ' ' } })
+  assert.equal(JSON.parse(empty.body).ok, false)
+  const badTarget = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/test-message', headers: PANEL, body: { kind: 'mock', targetKind: 'group', targetId: '', text: 'x' } })
+  assert.equal(JSON.parse(badTarget.body).ok, false)
+})
+
+test('状态：pricing 与最近审批透传', async () => {
+  const env = await setup()
+  await env.store.recordApproval({ decision: 'deny', summary: 'rm -rf /', actorId: 'owner', chatKey: 'mock:1:group:g' })
+  const state = (await call(env.webUi, { url: '/dsh-qq/api/state' })).json().state
+  assert.equal(state.approvals.length, 1)
+  assert.equal(state.approvals[0].decision, 'deny')
+  assert.deepEqual(state.config.pricing, { inputPerMillion: 0, outputPerMillion: 0 })
 })

@@ -327,6 +327,30 @@
   .usage-row .val small { display:block; margin-top:2px; font-size:11px; color:var(--muted); }
   .usage-empty { padding:18px; border:1px dashed var(--border); border-radius:14px; text-align:center; color:var(--muted); font-size:12.5px; }
 
+  /* ---------- 群记忆 / 测试消息 / 最近审批 ---------- */
+  .group-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--rule); }
+  .group-row:first-child { border-top:none; }
+  .group-row .grow { flex:1; min-width:0; }
+  .group-row .name { font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .group-row .sub { font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .group-editor { margin-top:14px; display:flex; flex-direction:column; gap:10px; }
+  .group-editor textarea { width:100%; min-height:180px; resize:vertical; padding:12px 14px; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); color:var(--text); font:inherit; font-size:13px; line-height:1.6; }
+  .group-editor textarea:focus { outline:none; border-color:var(--hue); box-shadow:0 0 0 3px var(--hue-pale); }
+  .group-editor .row { display:flex; align-items:center; gap:10px; }
+  .group-editor .hint { flex:1; font-size:11.5px; color:var(--muted); }
+  .test-row { display:grid; grid-template-columns:150px 110px 1fr 1.4fr auto; gap:10px; align-items:center; }
+  .test-row select, .test-row input { height:36px; padding:0 10px; border:1px solid var(--border); border-radius:9px; background:var(--surface-2); color:var(--text); font:inherit; font-size:13px; min-width:0; }
+  .test-row select:focus, .test-row input:focus { outline:none; border-color:var(--hue); box-shadow:0 0 0 3px var(--hue-pale); }
+  .test-result { margin-top:10px; font-size:12.5px; color:var(--muted); }
+  .test-result.ok { color:var(--ok); }
+  .test-result.bad { color:var(--bad); }
+  .approval-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--rule); font-size:12.5px; }
+  .approval-row:first-child { border-top:none; }
+  .approval-row .grow { flex:1; min-width:0; }
+  .approval-row .who { color:var(--muted); font-size:11.5px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .approval-row .when { flex:none; color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
+  @media (max-width:900px) { .test-row { grid-template-columns:1fr 1fr; } .test-row .btn { grid-column:span 2; } }
+
   /* ---------- responsive ---------- */
   @media (max-width:1180px) { .stats { grid-template-columns:repeat(2,1fr); } .cfg-grid { grid-template-columns:1fr 1fr; } .usage-kpis { grid-template-columns:1fr 1fr; } .usage-grid { grid-template-columns:1fr; } }
   @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
@@ -394,6 +418,7 @@
       <a class="nav-item" href="#sec-lines" data-sec="sec-lines" title="线路"><span class="ico" data-icon="link"></span><span class="nav-label">线路</span><span class="nav-badge" id="badge-lines">–</span></a>
       <a class="nav-item" href="#sec-cred" data-sec="sec-cred" title="登录与凭据"><span class="ico" data-icon="key"></span><span class="nav-label">登录与凭据</span></a>
       <a class="nav-item" href="#sec-identity" data-sec="sec-identity" title="身份与授权"><span class="ico" data-icon="user"></span><span class="nav-label">身份与授权</span><span class="nav-badge" id="badge-pending">–</span></a>
+      <a class="nav-item" href="#sec-groups" data-sec="sec-groups" title="群记忆"><span class="ico" data-icon="book"></span><span class="nav-label">群记忆</span><span class="nav-badge" id="badge-groups">–</span></a>
       <a class="nav-item" href="#sec-config" data-sec="sec-config" title="配置"><span class="ico" data-icon="sliders"></span><span class="nav-label">配置</span></a>
       <a class="nav-item" href="#sec-trend" data-sec="sec-trend" title="活动量"><span class="ico" data-icon="activity"></span><span class="nav-label">活动量</span></a>
       <a class="nav-item" href="#sec-usage" data-sec="sec-usage" title="Token 消耗"><span class="ico" data-icon="coins"></span><span class="nav-label">Token 消耗</span></a>
@@ -478,6 +503,11 @@
       <div id="identity"></div>
     </section>
 
+    <section class="card" id="sec-groups">
+      <div class="card-head"><span class="ico" data-icon="book"></span><h2>群记忆</h2><span class="right" id="groups-note"></span></div>
+      <div id="groups"></div>
+    </section>
+
     <section class="card" id="sec-config">
       <div class="card-head"><span class="ico" data-icon="sliders"></span><h2>配置</h2><span class="right" id="dirty-note"></span></div>
       <div class="cfg-grid" id="config"></div>
@@ -497,6 +527,21 @@
       <section class="card" id="sec-runtime">
         <div class="card-head"><span class="ico" data-icon="info"></span><h2>运行信息</h2><span class="right" id="runtime-note"></span></div>
         <div id="readonly"></div>
+        <div style="margin-top:18px">
+          <div class="usage-panel-title">发条测试消息</div>
+          <div class="test-row">
+            <select id="test-kind" aria-label="线路"></select>
+            <select id="test-target-kind" aria-label="目标类型">
+              <option value="dm">私聊</option>
+              <option value="group">群聊</option>
+              <option value="channel">频道（频道号/子频道）</option>
+            </select>
+            <input id="test-target" placeholder="QQ 号 / 群号 / openid" aria-label="目标 ID">
+            <input id="test-text" placeholder="要发送的文本" aria-label="消息内容">
+            <button class="btn primary" id="test-send" type="button">发送</button>
+          </div>
+          <div id="test-result" class="test-result" role="status" aria-live="polite"></div>
+        </div>
         <details class="raw"><summary>当前生效配置（脱敏）</summary><pre id="raw-config"></pre></details>
       </section>
     </div>
@@ -521,6 +566,7 @@
     terminal: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>',
     key: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M17 4l3 3M15 8l2 2"/></svg>',
     user: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>',
+    book: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 5.5v16"/><path d="M8 7h8M8 11h8"/></svg>',
     sliders: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h9M17 17h3"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="17" r="2"/></svg>',
     coins: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>',
     activity: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 4 12 2.5-6h5"/></svg>',
@@ -968,6 +1014,157 @@
       table.appendChild(tbody);
       host.appendChild(table);
     }
+    renderApprovals(host);
+  }
+
+  /** 最近审批（只显示结果元数据，不含审批正文）。 */
+  function renderApprovals(host) {
+    host.appendChild(el('div', { style: 'font-size:13px;font-weight:600;margin:20px 0 10px', text: '最近审批' }));
+    var rows = Array.isArray(S.approvals) ? S.approvals : [];
+    if (rows.length === 0) {
+      host.appendChild(el('div', { className: 'empty', text: '还没有审批记录。机器人执行敏感操作时，允许/拒绝的结果会记在这里。' }));
+      return;
+    }
+    var box = el('div', {});
+    rows.slice(0, 12).forEach(function (row) {
+      box.appendChild(el('div', { className: 'approval-row' }, [
+        pill(row.decision === 'allow' ? '允许' : '拒绝', row.decision === 'allow' ? 'ok' : 'bad', false),
+        el('div', { className: 'grow' }, [
+          el('div', { text: row.summary ? String(row.summary).slice(0, 120) : '（无摘要）' }),
+          el('div', { className: 'who', text: (row.actorId ? '操作人 ' + row.actorId : '操作人未知') + ' · ' + (row.chatKey ? String(row.chatKey).slice(0, 48) : '无会话') })
+        ]),
+        el('div', { className: 'when', text: fmtTime(row.at) })
+      ]));
+    });
+    host.appendChild(box);
+  }
+
+  /* ---------- 群记忆（群笔记）---------- */
+  var editingGroupFile = '';
+
+  /** 文件名 → 人看标签：..._group_798898058.md → 群 798898058 */
+  function groupLabel(file) {
+    var name = String(file || '').replace(/\.md$/, '');
+    var match = name.match(/(?:group|dm)_([A-Za-z0-9_-]+)$/);
+    if (match) return (/_group_/.test(name) ? '群 ' : '私聊 ') + match[1];
+    return name;
+  }
+
+  function renderGroups() {
+    var host = document.getElementById('groups');
+    if (!host) return;
+    host.textContent = '';
+    var rows = Array.isArray(S.groups) ? S.groups : [];
+    var badge = document.getElementById('badge-groups');
+    if (badge) { badge.textContent = rows.length === 0 ? '0' : String(rows.length); }
+    var note = document.getElementById('groups-note');
+    if (note) note.textContent = rows.length === 0 ? '' : rows.length + ' 个群有笔记';
+    if (rows.length === 0) {
+      host.appendChild(el('div', { className: 'empty', text: '还没有群笔记。机器人在群里被 @ 后会自己记长期约定；你也可以在这里直接编辑（需要群记忆已启用）。' }));
+      return;
+    }
+    rows.forEach(function (row) {
+      host.appendChild(el('div', { className: 'group-row' }, [
+        el('div', { className: 'grow' }, [
+          el('div', { className: 'name', text: groupLabel(row.file) }),
+          el('div', { className: 'sub', text: row.chars + ' 字 · 更新于 ' + fmtTime(row.updatedAt) })
+        ]),
+        btn('编辑', 'sm', function () { openGroupEditor(row.file); }),
+        btn('清空', 'quiet sm', function () {
+          if (window.confirm('确定清空「' + groupLabel(row.file) + '」的笔记？这个操作不可撤销。')) {
+            saveGroupNote(row.file, '');
+          }
+        })
+      ]));
+    });
+    if (editingGroupFile !== '') {
+      var editor = el('div', { className: 'group-editor' });
+      var textarea = el('textarea', { id: 'group-editor-text', placeholder: '加载中…' });
+      editor.appendChild(el('div', { className: 'row' }, [
+        el('div', { className: 'hint', text: groupLabel(editingGroupFile) + ' · ' + editingGroupFile }),
+        el('span', { className: 'hint', id: 'group-editor-count' })
+      ]));
+      editor.appendChild(textarea);
+      editor.appendChild(el('div', { className: 'row' }, [
+        el('div', { className: 'hint', text: '直接编辑 Markdown；保存后机器人下次被 @ 时生效（容量上限见配置）。' }),
+        btn('保存笔记', 'primary sm', function () { saveGroupNote(editingGroupFile, textarea.value); }),
+        btn('关闭', 'quiet sm', function () { editingGroupFile = ''; renderGroups(); })
+      ]));
+      host.appendChild(editor);
+      var count = document.getElementById('group-editor-count');
+      var refresh = function () { if (count) count.textContent = textarea.value.length + ' 字'; };
+      textarea.addEventListener('input', refresh);
+      api('/dsh-qq/api/groups/note?file=' + encodeURIComponent(editingGroupFile), {}).then(function (res) {
+        if (res.data && res.data.ok === true) { textarea.value = String(res.data.text ?? ''); refresh(); }
+        else textarea.placeholder = (res.data && res.data.error) || '读取失败';
+      }).catch(function (error) { textarea.placeholder = String(error.message || error); });
+    }
+  }
+
+  function openGroupEditor(file) {
+    editingGroupFile = file;
+    renderGroups();
+  }
+
+  function saveGroupNote(file, text) {
+    api('/dsh-qq/api/groups/note', { file: file, text: text }).then(function (res) {
+      if (res.data && res.data.ok === true) {
+        notice('群笔记已保存（' + (res.data.chars ?? text.length) + ' 字）');
+        editingGroupFile = '';
+        load();
+      } else {
+        notice((res.data && res.data.error) || '保存失败', 'bad');
+      }
+    }).catch(function (error) { notice(String(error.message || error), 'bad'); });
+  }
+
+  /* ---------- 测试消息 ---------- */
+  function testMessageKinds() {
+    return (Array.isArray(S.lines) ? S.lines : []).filter(function (line) { return line.enabled !== false; });
+  }
+
+  function renderTestMessage() {
+    var select = document.getElementById('test-kind');
+    if (!select) return;
+    var lines = testMessageKinds();
+    var previous = select.value;
+    select.textContent = '';
+    lines.forEach(function (line) {
+      var option = el('option', { value: line.kind });
+      option.textContent = (line.kind === 'qqbot' ? '官方线' : line.kind) + (line.connected === true ? '' : '（未连接）');
+      select.appendChild(option);
+    });
+    if (lines.length === 0) {
+      var empty = el('option', { value: '' });
+      empty.textContent = '没有启用中的线路';
+      select.appendChild(empty);
+    } else if (previous !== '' && lines.some(function (line) { return line.kind === previous; })) {
+      select.value = previous;
+    }
+  }
+
+  function sendTestMessage() {
+    var result = document.getElementById('test-result');
+    var kind = document.getElementById('test-kind').value;
+    var targetKind = document.getElementById('test-target-kind').value;
+    var targetId = document.getElementById('test-target').value.trim();
+    var text = document.getElementById('test-text').value;
+    if (text.trim() === '') { result.className = 'test-result bad'; result.textContent = '先填要发送的文本。'; return; }
+    if (targetId === '') { result.className = 'test-result bad'; result.textContent = '先填目标 ID。'; return; }
+    result.className = 'test-result';
+    result.textContent = '发送中…';
+    api('/dsh-qq/api/test-message', { kind: kind, targetKind: targetKind, targetId: targetId, text: text }).then(function (res) {
+      if (res.data && res.data.ok === true) {
+        result.className = 'test-result ok';
+        result.textContent = '已发送' + (res.data.messageId ? '（messageId ' + res.data.messageId + '）' : '') + '。';
+      } else {
+        result.className = 'test-result bad';
+        result.textContent = '发送失败：' + ((res.data && res.data.error) || '未知错误');
+      }
+    }).catch(function (error) {
+      result.className = 'test-result bad';
+      result.textContent = '发送失败：' + String(error.message || error);
+    });
   }
 
   /* ---------- config ---------- */
@@ -1170,6 +1367,9 @@
       host.appendChild(el('div', { className: 'usage-empty', text: '还没有 token 记录：机器人在 QQ 里完成回复后，这里会按天累计输入/输出 token。' }));
       return;
     }
+    var pricing = (S.config && S.config.pricing) || {};
+    var cost = Number(pricing.inputPerMillion || 0) * totals.input / 1e6 + Number(pricing.outputPerMillion || 0) * totals.output / 1e6;
+    var costText = cost > 0 ? '约 ¥' + cost.toFixed(2) : '';
     if (note) note.textContent = '保留 ' + (usage.span || 30) + ' 天';
 
     var count = usageRangeCount();
@@ -1197,10 +1397,14 @@
     }).filter(function (row) { return row.total > 0; }).sort(function (a, b) { return b.total - a.total; });
 
     var kpis = el('div', { className: 'usage-kpis' });
+    var pricing = (S.config && S.config.pricing) || {};
+    var cost = Number(pricing.inputPerMillion || 0) * totals.input / 1e6 + Number(pricing.outputPerMillion || 0) * totals.output / 1e6;
+    var costText = cost > 0 ? '约 ¥' + cost.toFixed(2) : '';
     [['总消耗', totals.total, 'tok'], ['输入', totals.input, 'tok'], ['输出', totals.output, 'tok'], ['回复条数', totals.turns, '条']].forEach(function (item) {
       kpis.appendChild(el('div', { className: 'usage-kpi' }, [
         el('div', { className: 'k', text: item[0] }),
         el('div', { className: 'v' }, [document.createTextNode(fmtTokens(item[1])), el('small', { text: item[2] })])
+        , (item[0] === '总消耗' && costText !== '' ? el('div', { style: 'font-size:11.5px;color:var(--muted);margin-top:4px', text: costText }) : null)
       ]));
     });
     host.appendChild(kpis);
@@ -1327,9 +1531,11 @@
     renderUsage();
     renderCredentials();
     renderIdentity();
+    renderGroups();
     renderConfig();
     renderActivity();
     renderReadonly();
+    renderTestMessage();
   }
 
   function load() {
@@ -1353,8 +1559,10 @@
       renderUsage();
       renderCredentials();
       renderIdentity();
+      renderGroups();
       renderActivity();
       renderReadonly();
+      renderTestMessage();
     }).catch(function (error) {
       var fresh = document.getElementById('fresh');
       fresh.className = 'top-fresh err';
@@ -1430,6 +1638,10 @@
       renderUsage();
     });
   }
+  var testSend = document.getElementById('test-send');
+  if (testSend) testSend.addEventListener('click', sendTestMessage);
+  var testText = document.getElementById('test-text');
+  if (testText) testText.addEventListener('keydown', function (event) { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) sendTestMessage(); });
   paintIcons();
   initTheme();
   initRail();

@@ -163,3 +163,32 @@ test('groupMemory 配置：默认开启、未知键与非法值报错（不留�
   assert.throws(() => resolveConfig({ transport: 'mock', groupMemory: { nope: 1 } }), /unknown keys/)
   assert.throws(() => resolveConfig({ transport: 'mock', groupMemory: { contextMaxChars: 0 } }), /contextMaxChars/)
 })
+
+// ── 控制台编辑：笔记文件列表 / 读取 / 整篇写入 ──
+
+test('群笔记文件：列表、读取、写入、容量闸门、路径穿越拒绝', async () => {
+  const { memory } = await setup({ groupMemory: { enabled: true, notesMaxChars: 200 } })
+  await memory.editNotes(GROUP, { action: 'add', text: '群里管主人叫老板' })
+  const list = await memory.listNotes()
+  assert.equal(list.length, 1)
+  assert.match(list[0].file, /\.md$/)
+  assert.ok(list[0].chars > 0)
+
+  const read = await memory.readNoteFile(list[0].file)
+  assert.equal(read.ok, true)
+  assert.match(read.text, /老板/)
+
+  const write = await memory.writeNoteFile(list[0].file, '# 群记忆\n- 换了一条\n')
+  assert.equal(write.ok, true)
+  assert.equal((await memory.notesOf(GROUP)).includes('换了一条'), true, '写入后注入缓存要失效')
+
+  assert.equal((await memory.writeNoteFile(list[0].file, 'x'.repeat(201))).ok, false, '超容量拒绝')
+  assert.equal((await memory.readNoteFile('../../etc/passwd')).ok, false, '路径穿越拒绝')
+  assert.equal((await memory.writeNoteFile('a/b.md', 'x')).ok, false, '子路径拒绝')
+})
+
+test('群笔记文件：功能未启用时列表为空、写入报错', async () => {
+  const { memory } = await setup({ groupMemory: { enabled: false } })
+  assert.deepEqual(await memory.listNotes(), [])
+  assert.equal((await memory.writeNoteFile('x.md', 'hi')).ok, false)
+})

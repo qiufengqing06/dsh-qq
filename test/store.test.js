@@ -280,3 +280,30 @@ test('normalizeUsageNumbers：兼容不同字段名，缺 total 时用输入+输
   assert.equal(normalizeUsageNumbers({}), null)
   assert.equal(normalizeUsageNumbers(null), null)
 })
+
+// ── 审批历史：只留决策元数据，最多 50 条，重启不丢 ──
+
+test('审批历史：记录允许/拒绝，非法决策忽略，容量封顶 50', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-approvals-'))
+  const store = createStore({ dir })
+  await store.load()
+  assert.deepEqual(store.approvalsRecent(), [])
+
+  await store.recordApproval({ at: 1000, chatKey: 'qqbot:1:dm:u1', decision: 'allow', actorId: 'owner', summary: '运行 rm', approvalId: 'ap-1' })
+  await store.recordApproval({ decision: 'deny', summary: '拒绝执行' })
+  assert.equal(await store.recordApproval({ decision: 'maybe' }), null, '非法决策忽略')
+  const rows = store.approvalsRecent()
+  assert.equal(rows.length, 2)
+  assert.equal(rows[0].decision, 'deny', '最新的在前')
+  assert.equal(rows[1].actorId, 'owner')
+
+  for (let index = 0; index < 60; index += 1) {
+    await store.recordApproval({ decision: 'allow', summary: `第 ${index} 条` })
+  }
+  assert.equal(store.approvalsRecent(100).length, 50, '最多 50 条')
+
+  const reloaded = createStore({ dir })
+  await reloaded.load()
+  assert.equal(reloaded.approvalsRecent(100).length, 50)
+  assert.equal(reloaded.approvalsRecent()[0].summary, '第 59 条')
+})

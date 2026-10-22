@@ -240,6 +240,7 @@ test('页面内联脚本必须能解析（历史上一次换行转义写坏，�
 
 test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   const env = await setup()
+  await env.store.recordUsage('qqbot:1905346673:dm:owner-openid', { inputTokens: 7, outputTokens: 3 })
   const res = await call(env.webUi, { url: `${PAGE_PATH}/api/state` })
   assert.equal(res.code, 200)
   const state = res.json().state
@@ -257,13 +258,15 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.equal(state.values['agentOptions.model'], 'deepseek-flash')
   assert.deepEqual(state.credentials, { qqbot: false })
   assert.equal(state.activity.length, 7, '活动序列固定 7 天')
+  assert.equal(state.usage.totals.today.total, 10, 'token 用量报表透传')
+  assert.equal(state.usage.chats.length, 1)
   assert.equal(state.activity.every(day => day.qqbot === 0), true, '还没有活动计数时全为 0')
   assert.equal(state.alerts.enabled, true, '默认注入告警快照')
   // 模型目录：页面用它渲染 provider/model 下拉（DSH 配了哪些就显示哪些）
   assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
   assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
   assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'config', 'connections', 'credentials', 'fields', 'identity', 'lines', 'mode', 'models', 'pagePath', 'paths', 'routes', 'stats', 'status', 'transport', 'url', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'config', 'connections', 'credentials', 'fields', 'identity', 'lines', 'mode', 'models', 'pagePath', 'paths', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {

@@ -220,3 +220,63 @@ test('活动计数：超过保留天数的旧记录在写入时被裁掉', async
   assert.equal(store.snapshot().activity[oldKey], undefined, '60 天前的记录应被裁掉')
   assert.ok(store.snapshot().activity[Object.keys(store.snapshot().activity)[0]].qqbot >= 1)
 })
+
+
+// ── token 用量：按对话/按天记账 + 30 天报表 ──
+
+test('token 用量：按对话按天累计，报表给出今日/近7天/近30天合计与排序', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-usage-'))
+  const store = createStore({ dir })
+  await store.load()
+
+  await store.recordUsage('qqbot:1905346673:dm:user-a', { inputTokens: 100, outputTokens: 40, totalTokens: 140 })
+  await store.recordUsage('qqbot:1905346673:dm:user-a', { inputTokens: 10, outputTokens: 5 })
+  await store.recordUsage('mock:10001:group:90001', { promptTokens: 200, completionTokens: 50 })
+  assert.equal(await store.recordUsage('', { totalTokens: 1 }), null, '空 chatKey 忽略')
+  assert.equal(await store.recordUsage('qqbot:x', {}), null, '没有用量的 usage 忽略')
+
+  const report = store.usageReport({ days: 30 })
+  assert.equal(report.span, 30)
+  assert.equal(report.days.length, 30, '固定 30 天序列')
+  assert.deepEqual(report.totals.today, { total: 405, input: 310, output: 95, turns: 3 })
+  assert.equal(report.totals.week.total, 405, '只用今天的数据时 7 天 = 今天')
+  assert.equal(report.totals.month.total, 405)
+  assert.deepEqual(report.chats.map(row => row.chatKey).slice(0, 2), [
+    'mock:10001:group:90001',
+    'qqbot:1905346673:dm:user-a',
+  ], '按总消耗降序')
+  assert.equal(report.chats[1].turns, 2)
+  assert.equal(report.chats[0].days[report.days.at(-1).date].total, 250)
+
+  const reloaded = createStore({ dir })
+  await reloaded.load()
+  assert.equal(reloaded.usageReport({ days: 30 }).totals.today.total, 405)
+})
+
+test('token 用量：超过保留天数的旧记录在写入时裁掉', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-usage-prune-'))
+  const old = new Date(Date.now() - 60 * 86400_000)
+  const pad = value => String(value).padStart(2, '0')
+  const oldKey = `${old.getFullYear()}-${pad(old.getMonth() + 1)}-${pad(old.getDate())}`
+  await writeFile(join(dir, 'store.v1.json'), JSON.stringify({
+    version: 1,
+    chats: {},
+    pairing: { policy: 'pairing', roles: {}, pending: [] },
+    meta: {},
+    usage: { [oldKey]: { 'qqbot:1:dm:u': { in: 10, out: 5, total: 15, turns: 1 } } },
+  }), 'utf8')
+  const store = createStore({ dir })
+  await store.load()
+  for (let index = 0; index < 40; index += 1) {
+    await store.recordUsage('qqbot:1905346673:dm:user-a', { totalTokens: 1 })
+  }
+  assert.equal(store.snapshot().usage[oldKey], undefined, '60 天前的用量应被裁掉')
+})
+
+test('normalizeUsageNumbers：兼容不同字段名，缺 total 时用输入+输出', async () => {
+  const { normalizeUsageNumbers } = await import('../lib/store.js')
+  assert.deepEqual(normalizeUsageNumbers({ inputTokens: 3, outputTokens: 4 }), { input: 3, output: 4, total: 7 })
+  assert.deepEqual(normalizeUsageNumbers({ prompt_tokens: 5, completion_tokens: 6, total_tokens: 12 }), { input: 5, output: 6, total: 12 })
+  assert.equal(normalizeUsageNumbers({}), null)
+  assert.equal(normalizeUsageNumbers(null), null)
+})

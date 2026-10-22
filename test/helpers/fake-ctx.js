@@ -60,12 +60,15 @@ export function createFakeAgent({ sessionId, events = [] }) {
       agent.cancelled.push(cause)
     },
     /** 测试辅助：追加一条 assistant 回复事件，并经 session/event feed 投递（复刻真实接口）。 */
-    reply(text, seq = agent.session.events.length + 1) {
+    reply(text, seq = agent.session.events.length + 1, usage = null) {
       const event = {
         type: 'assistant/message',
         seq,
         time: Date.now(),
-        data: { message: { role: 'assistant', content: [{ type: 'text', text }] } },
+        data: {
+          message: { role: 'assistant', content: [{ type: 'text', text }] },
+          ...(usage === null ? {} : { usage }),
+        },
       }
       appendEvent(event)
       return agent

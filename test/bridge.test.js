@@ -1182,3 +1182,23 @@ test('已存在的活会话每轮都重新套用当前模型选择（否则配�
   assert.equal(calls.length, 2, '新建（resume/create）与复用（已活着）两条路径都要套用')
   assert.equal(calls[0].session, calls[1].session, '同一个会话')
 })
+
+
+test('token 用量：assistant/message 的 usage 按对话记账（一轮多步累加）', async () => {
+  const { bridge, transport, agents, store } = await setup({}, {}, { capabilities: { markdown: true } })
+  await bridge.handleUserMessage(transport.injectText('ping'))
+  const agent = agents.live.get(agents.created[0].sessionId)
+  agent.reply('第一步', 900, { inputTokens: 100, outputTokens: 40, totalTokens: 140 })
+  agent.reply('第二步', 901, { inputTokens: 20, outputTokens: 10 })
+  agent.ctx.emitStatus('idle')
+  await tick()
+
+  const report = store.usageReport({ days: 30 })
+  assert.equal(report.totals.today.turns, 2, '两条 assistant 消息都记账')
+  assert.equal(report.totals.today.input, 120)
+  assert.equal(report.totals.today.output, 50)
+  assert.equal(report.totals.today.total, 170, 'totalTokens 缺省时用输入+输出')
+  assert.equal(report.chats.length, 1)
+  assert.match(report.chats[0].chatKey, /^mock:/, '归属到该对话的 chatKey')
+  assert.equal(report.chats[0].turns, 2)
+})

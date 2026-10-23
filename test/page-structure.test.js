@@ -26,6 +26,15 @@ test('导航项顺序与卡片 DOM 顺序一致，且每个 data-sec 都能找�
   assert.deepEqual(comparable, sections, '导航顺序与页面卡片顺序不一致（scroll-spy 会错配高亮）')
 })
 
+test('群笔记 GET 不得传空对象（第二个参数存在即 POST）', () => {
+  // 历史 bug：打开群笔记编辑器时传了 {} → GET 变 POST → 后端报「文件名不合法」
+  assert.doesNotMatch(
+    html,
+    /api\('\/dsh-qq\/api\/groups\/note\?file=[^']*'\s*,\s*\{\s*\}\s*\)/,
+    'GET 必须只传一个参数：api(path)',
+  )
+})
+
 test('scroll-spy 按文档位置排序（防止再次按导航顺序错配）', () => {
   assert.match(html, /sort\(function \(a, b\) \{ return a\.sec\.offsetTop - b\.sec\.offsetTop; \}\)/, 'scroll-spy 必须按 offsetTop 排序')
   assert.match(html, /atBottom/, '滚到底部应高亮最后一段')

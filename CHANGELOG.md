@@ -3,6 +3,11 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.14
+
+- 继续拆分 `control.js`：模型选择（会话级安装/默认回退/不可用自愈）抽到 `lib/model-selection.js`，
+  control 从 1022 行降到 758 行；新增 page-structure 断言防止 `api(path, {})` 把 GET 发成 POST。
+
 ## v0.7.13
 
 - 拆分 `control.js`：审批转发与配对申请抽到 `lib/approvals.js`（审批 answerer、等待决策、

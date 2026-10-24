@@ -236,7 +236,7 @@ test('页面：自包含 HTML（无外部资源），含线路/凭据/身份/配
   const res = await call(env.webUi, { url: PAGE_PATH })
   assert.equal(res.code, 200)
   assert.match(res.headers['content-type'], /text\/html/)
-  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库']) {
+  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库', '对话模式']) {
     assert.ok(res.body.includes(marker), `页面应包含 ${marker}`)
   }
   // 页面必须自包含：除本机地址外不得有外部 URL，也不得外链脚本/样式
@@ -314,6 +314,23 @@ test('人设库：state 元数据、正文 GET、增删默认绑定接口', asyn
   assert.equal(env.store.personaOf('qa'), null)
 })
 
+test('对话模式：state 透传 + POST /api/mode 切换与校验', async () => {
+  const env = await setup()
+  const chatKey = 'qqbot:1905346673:group:90001'
+  await env.store.setMode(chatKey, 'chat')
+  const state = (await call(env.webUi, { url: `${PAGE_PATH}/api/state` })).json().state
+  assert.equal(state.modes[chatKey], 'chat')
+
+  const toWork = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/mode`, headers: PANEL, body: { chatKey, mode: 'work' } })
+  assert.equal(toWork.code, 200, toWork.body)
+  assert.equal(env.store.modeFor(chatKey), 'work')
+
+  const badMode = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/mode`, headers: PANEL, body: { chatKey, mode: 'nope' } })
+  assert.equal(badMode.code, 400)
+  const badKey = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/mode`, headers: PANEL, body: { chatKey: 'bad', mode: 'chat' } })
+  assert.equal(badKey.code, 400)
+})
+
 test('配置写入：身份与权限字段（pairingPolicy / controlPolicy）可保存', async () => {
   const env = await setup()
   env.configEditor.current = { transport: 'qqbot' }
@@ -367,7 +384,7 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
   assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
   assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'pagePath', 'paths', 'personaBindings', 'personas', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'modes', 'pagePath', 'paths', 'personaBindings', 'personas', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {

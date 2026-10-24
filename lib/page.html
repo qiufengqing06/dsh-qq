@@ -1224,6 +1224,18 @@
     }).catch(function (error) { notice(String(error.message || error), 'bad'); return false; });
   }
 
+  /** 对话模式快速切换（工作/聊天）。 */
+  function setChatMode(chatKey, mode) {
+    api('/dsh-qq/api/mode', { chatKey: chatKey, mode: mode }).then(function (res) {
+      if (!res.data || res.data.ok !== true) {
+        notice((res.data && res.data.error) || '切换模式失败', 'bad');
+        return;
+      }
+      notice(mode === 'chat' ? '已切换到聊天模式（下一回合生效）' : '已切回工作模式', 'info');
+      load();
+    }).catch(function (error) { notice(String(error.message || error), 'bad'); });
+  }
+
   function startPersonaEdit(id) {
     if (id === '') {
       personaEditing = '@new';
@@ -1293,7 +1305,7 @@
     host.appendChild(el('div', { className: 'usage-panel-title', text: '人设库' }));
     host.appendChild(el('div', {
       style: 'font-size:11.5px;color:var(--muted);margin:0 0 8px',
-      text: '命名人设可绑定到指定对话；未绑定则回落到默认人设/旧提示词。'
+      text: '命名人设可绑定到指定对话；未绑定则回落到默认人设/旧提示词。每行的「模式」可直接切换工作/聊天。'
     }));
 
     var head = el('div', { className: 'actions', style: 'margin-bottom:8px' });
@@ -1384,6 +1396,13 @@
         var info = promptLabel(key);
         var own = overrides[key] || '';
         var bound = bindings[key] && bindings[key].personaId ? bindings[key].personaId : '';
+        var currentMode = S.modes && S.modes[key] ? S.modes[key] : 'work';
+        var modeSelect = el('select', { 'aria-label': '对话模式', style: 'width:92px' });
+        modeSelect.appendChild(el('option', { value: 'work', text: '工作' }));
+        modeSelect.appendChild(el('option', { value: 'chat', text: '聊天' }));
+        modeSelect.value = currentMode;
+        modeSelect.addEventListener('change', function () { setChatMode(key, modeSelect.value); });
+
         var bindSelect = el('select', { 'aria-label': '对话人设绑定', style: 'width:150px' });
         bindSelect.appendChild(el('option', { value: '', text: '跟随默认人设' }));
         (Array.isArray(S.personas) ? S.personas : []).forEach(function (item) {
@@ -1400,6 +1419,7 @@
             el('div', { className: 'sub mono', text: key })
           ]),
           el('span', { className: 'pill neutral', text: info.kind }),
+          modeSelect,
           bindSelect,
           bound !== '' ? pill('人设', 'ok', false) : pill(own === '' ? '跟随默认' : '旧提示词', own === '' ? 'neutral' : 'warn', false),
           btn('编辑旧提示词', 'sm', function () { promptEditing = key; renderPrompts(); }),

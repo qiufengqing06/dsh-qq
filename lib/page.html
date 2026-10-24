@@ -565,6 +565,36 @@
   var dirty = {};
   var HDR = { 'content-type': 'application/json', 'x-dsh-qq-panel': '1' };
 
+  /* page-format:start — 纯函数；test/page-format.test.js 直接抽取这一段单测（不依赖 DOM） */
+  function fmtTime(ms) { if (!ms) return ''; return new Date(ms).toLocaleTimeString('zh-CN', { hour12: false }); }
+  function relTime(ms) {
+    if (!ms) return '—';
+    var diff = Date.now() - ms;
+    if (diff < 60000) return '刚刚';
+    if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
+    if (diff < 7 * 86400000) return Math.floor(diff / 86400000) + ' 天前';
+    return new Date(ms).toLocaleDateString('zh-CN');
+  }
+  /** 数字缩写：12.3k / 3.4M，避免卡片被大数字撑破。 */
+  function fmtTokens(value) {
+    var n = Number(value) || 0;
+    if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M';
+    if (n >= 1e4) return (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k';
+    return String(n);
+  }
+  /** chatKey → 可读标签：`<线路>:<账号>:<dm|group>:<id>`。 */
+  function chatDisplay(chatKey) {
+    var parts = String(chatKey || '').split(':');
+    var kind = parts[0] === 'qqbot' ? '官方线' : (parts[0] || '—');
+    var targetKind = parts[2];
+    var targetId = parts.slice(3).join(':');
+    var label = targetKind === 'group' ? '群 ' + targetId : targetKind === 'dm' ? '私聊 ' + targetId : (targetKind || '对话') + ' ' + targetId;
+    if (label.length > 30) label = label.slice(0, 28) + '…';
+    return { kind: kind, label: label };
+  }
+  /* page-format:end */
+
   /* ---------- icons ---------- */
   var ICONS = {
     dashboard: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>',
@@ -623,16 +653,6 @@
     node.textContent = text;
     clearTimeout(notice._t);
     notice._t = setTimeout(function () { node.className = 'notice'; }, 7000);
-  }
-  function fmtTime(ms) { if (!ms) return ''; return new Date(ms).toLocaleTimeString('zh-CN', { hour12: false }); }
-  function relTime(ms) {
-    if (!ms) return '—';
-    var diff = Date.now() - ms;
-    if (diff < 60000) return '刚刚';
-    if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
-    if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
-    if (diff < 7 * 86400000) return Math.floor(diff / 86400000) + ' 天前';
-    return new Date(ms).toLocaleDateString('zh-CN');
   }
   function api(path, body) {
     return fetch(path, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: HDR, body: JSON.stringify(body) })
@@ -1460,27 +1480,8 @@
   /* ---------- Token 消耗 ---------- */
   var usageRange = 'month';
 
-  /** 数字缩写：12.3k / 3.4M，避免卡片被大数字撑破。 */
-  function fmtTokens(value) {
-    var n = Number(value) || 0;
-    if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M';
-    if (n >= 1e4) return (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k';
-    return String(n);
-  }
-
   function usageRangeCount() {
     return usageRange === 'today' ? 1 : usageRange === 'week' ? 7 : 30;
-  }
-
-  /** chatKey → 可读标签：`<线路>:<账号>:<dm|group>:<id>`。 */
-  function chatDisplay(chatKey) {
-    var parts = String(chatKey || '').split(':');
-    var kind = parts[0] === 'qqbot' ? '官方线' : (parts[0] || '—');
-    var targetKind = parts[2];
-    var targetId = parts.slice(3).join(':');
-    var label = targetKind === 'group' ? '群 ' + targetId : targetKind === 'dm' ? '私聊 ' + targetId : (targetKind || '对话') + ' ' + targetId;
-    if (label.length > 30) label = label.slice(0, 28) + '…';
-    return { kind: kind, label: label };
   }
 
   function renderUsage() {

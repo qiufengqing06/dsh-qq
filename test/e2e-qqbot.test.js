@@ -10,6 +10,27 @@ import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ct
 
 const tick = (ms = 25) => new Promise(resolve => setTimeout(resolve, ms))
 
+async function waitFor(predicate, timeoutMs = 3000, stepMs = 20) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (predicate()) return true
+    await tick(stepMs)
+  }
+  return predicate()
+}
+
+/** 等到消息真的进入会话：agents.create 与 bridge.followup 不在同一个 tick，固定 tick 在慢机器上会偶发空。 */
+async function waitForFollowup(agents, count = 1, timeoutMs = 3000) {
+  const ready = await waitFor(() => {
+    const entry = agents.created[0]
+    if (entry === undefined) return false
+    const agent = agents.live.get(entry.sessionId)
+    return agent !== undefined && Array.isArray(agent.followed) && agent.followed.length >= count
+  }, timeoutMs)
+  assert.equal(ready, true, '消息应在超时前进入会话')
+  return agents.live.get(agents.created[0].sessionId)
+}
+
 /** 取出 QQ 消息体里的文本（markdown 模式放在 body.markdown.content）。 */
 const textOf = body => (typeof body?.content === 'string' ? body.content : body?.markdown?.content ?? '')
 /** 被动回复引用：markdown 模式用 msg_id，纯文本用 message_reference。 */
@@ -79,11 +100,7 @@ test('端到端：QQ 私聊 ping → DSH 会话 → 回复经 REST 回到 QQ', a
     timestamp: '1700000000',
     author: { user_openid: 'openid-owner', username: '小明' },
   })
-  await tick(50)
-
-  assert.equal(env.agents.created.length, 1, '应创建一个 DSH 会话')
-  const agent = env.agents.live.get(env.agents.created[0].sessionId)
-  assert.equal(agent.followed.length, 1)
+  const agent = await waitForFollowup(env.agents)
   assert.deepEqual(agent.followed[0].content, [{ type: 'text', text: 'ping' }])
 
   // DSH 回合结束 → 回复回发 QQ
@@ -322,14 +339,14 @@ test('P5 端到端：QQ 发图片 → 下载入库 → 模型可见 image block'
     author: { user_openid: 'openid-owner', username: '小明' },
     attachments: [{ content_type: 'image/png', url: imageUrl, filename: 'photo.png', size: 128 }],
   })
-  await tick(80)
+  const agent = await waitForFollowup(env.agents)
 
   assert.equal(attachments.saved.images.length, 1, '图片应被下载并入库')
   assert.equal(attachments.saved.images[0].data.byteLength, 128)
   assert.equal(env.server.state.mediaRequests.length, 1)
   assert.equal(env.server.state.mediaRequests[0].headers.authorization.startsWith('QQBot token-'), true, '媒体下载必须带鉴权头')
 
-  const blocks = env.agents.live.get(env.agents.created[0].sessionId).followed[0].content
+  const blocks = agent.followed[0].content
   assert.deepEqual(blocks[0], { type: 'text', text: '看这张图' })
   assert.equal(blocks[1].type, 'image')
   assert.equal(blocks[1].attachment.mediaType, 'image/png')
@@ -370,7 +387,6 @@ test('P5 端到端：语音带内置 ASR 文本 → 直接作为文本进入会�
       { content_type: 'voice/silk', url: `${env.server.baseUrl}/media/v.silk?size=32`, filename: 'v.silk', asr_refer_text: '明天几点开会' },
     ],
   })
-  await tick(80)
-  const text = env.agents.live.get(env.agents.created[0].sessionId).followed[0].content[0].text
-  assert.equal(text, '[语音转写] 明天几点开会')
+  const agent = await waitForFollowup(env.agents)
+  assert.equal(agent.followed[0].content[0].text, '[语音转写] 明天几点开会')
 })

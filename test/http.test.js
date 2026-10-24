@@ -111,6 +111,22 @@ test('媒体 URL 闸门：私网/回环默认拒绝，allowedHosts / allowPrivat
   assert.equal(privateOn.ok, true)
 })
 
+test('媒体 URL 闸门：Clash/mihomo fake-IP 段（198.18/15）按公网放行', async () => {
+  let calls = 0
+  const result = await downloadHttp({
+    url: 'https://cdn.example/photo.jpg',
+    maxBytes: 10,
+    fetchImpl: async () => {
+      calls += 1
+      return new Response('ok', { status: 200 })
+    },
+    // Clash 的 fake-IP DNS：域名返回 198.18.x.x，由代理转真实 CDN
+    lookup: async () => [{ address: '198.18.1.10', family: 4 }],
+  })
+  assert.equal(result.ok, true)
+  assert.equal(calls, 1)
+})
+
 test('媒体 URL 闸门：DNS 解析到私网也拒绝，重定向到私网不会继续拉取', async () => {
   let calls = 0
   const fetchImpl = async () => {

@@ -84,6 +84,25 @@ test('未授权用户 → 配对流程，不创建会话', async () => {
   assert.equal(store.pendingPairing().length, 1)
 })
 
+test('pairingPolicy=allowlist：陌生人直接拒绝，不写待批申请', async () => {
+  const { router, transport, agents, store } = await setup({ pairingPolicy: 'allowlist' })
+  const ev = transport.inject({ text: '你好', sender: { id: 'stranger', name: '路人' } })
+  const result = await router.routeInbound(ev)
+  assert.equal(result.handled, 'rejected')
+  assert.equal(result.reason, 'unauthorized')
+  assert.match(result.reply, /白名单/)
+  assert.equal(agents.created.length, 0)
+  assert.equal(store.pendingPairing().length, 0, 'allowlist 不得退化成 pairing（不写 pending）')
+})
+
+test('pairingPolicy=allowlist：已授权用户正常对话', async () => {
+  const { router, transport, agents, store } = await setup({ pairingPolicy: 'allowlist' })
+  await store.addAuthorized('member-1', { role: 'authorized' })
+  const result = await router.routeInbound(transport.inject({ text: '你好', sender: { id: 'member-1', name: '成员' } }))
+  assert.equal(result.handled, 'message')
+  assert.equal(agents.created.length, 1)
+})
+
 test('pairingPolicy=open 时陌生用户可直接对话', async () => {
   const { router, transport, agents } = await setup({ pairingPolicy: 'open' })
   const ev = transport.inject({ text: '你好', sender: { id: 'stranger', name: '路人' } })

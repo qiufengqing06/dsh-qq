@@ -342,8 +342,8 @@
   .test-row select, .test-row input { height:36px; padding:0 10px; border:1px solid var(--border); border-radius:9px; background:var(--surface-2); color:var(--text); font:inherit; font-size:13px; min-width:0; }
   .test-row select:focus, .test-row input:focus { outline:none; border-color:var(--hue); box-shadow:0 0 0 3px var(--hue-pale); }
   .test-result { margin-top:10px; font-size:12.5px; color:var(--muted); }
-  .test-result.ok { color:var(--ok); }
-  .test-result.bad { color:var(--bad); }
+  .test-result.ok { color:var(--positive); }
+  .test-result.bad { color:var(--negative); }
   .approval-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--rule); font-size:12.5px; }
   .approval-row:first-child { border-top:none; }
   .approval-row .grow { flex:1; min-width:0; }
@@ -1220,7 +1220,8 @@
       btn('编辑', 'sm', function () { promptEditing = '@default'; renderPrompts(); }),
       defaultText === '' ? null : btn('清除', 'quiet sm', function () { savePrompt('', ''); })
     ]));
-    if (promptEditing === '@default') host.appendChild(promptEditor('@default', defaultText));
+    // chatKey 传空串 = 默认作用域；@default 只是本地展开状态，不能当 chatKey 提交（后端会拒绝）
+    if (promptEditing === '@default') host.appendChild(promptEditor('', defaultText));
 
     // 已知对话 + 已有覆盖的对话
     var keys = [];
@@ -1424,7 +1425,10 @@
         var catalogNow = modelCatalogOf();
         var nextProvider = catalogNow ? catalogNow.providers.filter(function (entry) { return entry.id === selectNode.value; })[0] : null;
         var currentModel = String(dirty['agentOptions.model'] !== undefined ? dirty['agentOptions.model'] : (S.values['agentOptions.model'] || ''));
-        if (nextProvider && currentModel !== '' && !nextProvider.models.some(function (model) { return model.id === currentModel; })) {
+        // provider 选空 = 跟随 DSH 全局默认；此时旧 model 必须一起清掉（后端会拒绝「没有 provider 只设 model」）
+        if (nextProvider === null) {
+          if (currentModel !== '') setDirty('agentOptions.model', '');
+        } else if (currentModel !== '' && !nextProvider.models.some(function (model) { return model.id === currentModel; })) {
           setDirty('agentOptions.model', '');
         }
         renderConfig();

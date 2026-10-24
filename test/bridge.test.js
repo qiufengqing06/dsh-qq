@@ -143,6 +143,27 @@ test('新建/切换会话：指针落 store，老会话保留', async () => {
   assert.equal(await bridge.switchSession(ev.chatKey, 42), null)
 })
 
+test('新建/切换会话释放旧 Agent 监听：迟到的 idle 不得回发', async () => {
+  const { bridge, transport, agents } = await setup()
+  const ev = transport.injectText('一')
+  await bridge.handleUserMessage(ev)
+  const firstAgent = agents.live.get(agents.created[0].sessionId)
+  assert.equal(firstAgent.ctx.listenerCount('agent/status'), 1, '首个 agent 应挂上状态监听')
+
+  await bridge.newSession(ev.chatKey)
+  assert.equal(firstAgent.ctx.listenerCount('agent/status'), 0, '新建会话必须释放旧 agent 的状态监听')
+  assert.equal(firstAgent.ctx.listenerCount('session/event'), 0, '新建会话必须释放旧 agent 的事件监听')
+
+  // 旧 agent 迟到的事件不能再用「当前」state 回发
+  firstAgent.reply('旧会话的回复')
+  firstAgent.ctx.emitStatus('idle')
+  await tick()
+  assert.equal(transport.dump().filter(entry => entry.kind === 'text').length, 0, '旧会话迟到 idle 不得回发')
+
+  await bridge.switchSession(ev.chatKey, 1)
+  assert.equal(firstAgent.ctx.listenerCount('agent/status'), 1, '切回旧会话时重新挂监听')
+})
+
 test('跨重启恢复：store 中的 sessionId 走 agents.resume', async () => {
   const { bridge, transport, store, agents } = await setup({}, { sessionPersistence: {} })
   const chatKey = transport.injectText('x').chatKey

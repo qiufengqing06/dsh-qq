@@ -39,3 +39,14 @@ test('scroll-spy 按文档位置排序（防止再次按导航顺序错配）', 
   assert.match(html, /sort\(function \(a, b\) \{ return a\.sec\.offsetTop - b\.sec\.offsetTop; \}\)/, 'scroll-spy 必须按 offsetTop 排序')
   assert.match(html, /atBottom/, '滚到底部应高亮最后一段')
 })
+
+test('默认提示词编辑器不得把 @default 当 chatKey 提交（后端会拒绝）', () => {
+  // 历史 bug：默认编辑器用 promptEditor('@default', …) → savePrompt('@default') → parseChatKey 抛错
+  assert.match(html, /promptEditor\('', defaultText\)/)
+  assert.doesNotMatch(html, /promptEditor\('@default'/)
+})
+
+test('测试消息结果使用已定义的颜色变量；provider 清空时一并清 model', () => {
+  assert.doesNotMatch(html, /var\(--ok\)|var\(--bad\)/, '主题里只有 --positive/--negative')
+  assert.match(html, /nextProvider === null[\s\S]{0,120}setDirty\('agentOptions\.model', ''\)/)
+})

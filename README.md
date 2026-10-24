@@ -143,7 +143,7 @@ QQ 官方机器人**通常不向个人开发者开放群 @ 消息权限**，所�
 - id: dsh-qq
   name: 'dsh-qq'
   config:
-    pairingPolicy: pairing      # pairing（需批准）| open（所有人）| allowlist
+    pairingPolicy: pairing      # pairing（需批准）| open（所有人）| allowlist（仅已授权，陌生人直接拒绝、不写待批）
     agentOptions:               # 本渠道的默认模型（只在对话没有「用户显式选择」时生效）
       provider: deepseek-official
       model: deepseek-flash

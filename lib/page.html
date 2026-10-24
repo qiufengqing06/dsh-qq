@@ -1637,7 +1637,40 @@
     });
     host.appendChild(grid);
     renderAlertEvents(host);
+    renderIssues(host);
     document.getElementById('raw-config').textContent = JSON.stringify(S.config, null, 2);
+  }
+
+  /** 最近问题：启动失败 / 会话恢复失败（store.meta 的诊断字段，只读）。 */
+  function renderIssues(host) {
+    var issues = S.issues || {};
+    var rows = [];
+    if (issues.lastResumeError) {
+      var sessionId = String(issues.lastResumeSessionId || '');
+      var sub = [];
+      if (sessionId) sub.push('会话 ' + sessionId.slice(0, 18) + (sessionId.length > 18 ? '…' : ''));
+      if (issues.lastIssueAt) sub.push('记录于 ' + relTime(issues.lastIssueAt));
+      rows.push({ label: '恢复失败', text: String(issues.lastResumeError), sub: sub.join(' · ') });
+    }
+    if (issues.lastStartError) {
+      rows.push({ label: '启动失败', text: String(issues.lastStartError), sub: '启动时记录；所有线路连上后自动清除' });
+    }
+    host.appendChild(el('div', { style: 'font-size:13px;font-weight:600;margin:20px 0 10px', text: '最近问题' }));
+    if (rows.length === 0) {
+      host.appendChild(el('div', { className: 'empty', text: '没有记录到启动或会话恢复失败。' }));
+      return;
+    }
+    var box = el('div', {});
+    rows.forEach(function (row) {
+      box.appendChild(el('div', { className: 'approval-row' }, [
+        pill(row.label, 'bad', false),
+        el('div', { className: 'grow' }, [
+          el('div', { style: 'overflow-wrap:anywhere', text: row.text }),
+          row.sub ? el('div', { className: 'who', text: row.sub }) : null
+        ])
+      ]));
+    });
+    host.appendChild(box);
   }
 
   function render() {

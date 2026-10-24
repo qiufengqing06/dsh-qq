@@ -235,13 +235,39 @@ test('页面：自包含 HTML（无外部资源），含线路/凭据/身份/配
   const res = await call(env.webUi, { url: PAGE_PATH })
   assert.equal(res.code, 200)
   assert.match(res.headers['content-type'], /text\/html/)
-  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2']) {
+  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题']) {
     assert.ok(res.body.includes(marker), `页面应包含 ${marker}`)
   }
   // 页面必须自包含：除本机地址外不得有外部 URL，也不得外链脚本/样式
   const external = [...res.body.matchAll(/https?:\/\/[^"'\s)]+/g)].map(match => match[0]).filter(url => !url.startsWith('http://127.0.0.1'))
   assert.deepEqual(external, [], '不得引用外部资源')
   assert.equal(/<script[^>]+src=|<link[^>]+rel=["']stylesheet/i.test(res.body), false, '不得外链脚本/样式')
+})
+
+test('状态：最近错误诊断字段透传（启动/恢复失败）', async () => {
+  const env = await setup()
+  let state = (await call(env.webUi, { url: `${PAGE_PATH}/api/state` })).json().state
+  assert.deepEqual(state.issues, { lastStartError: null, lastResumeError: null, lastResumeSessionId: null, lastIssueAt: null }, '没有记录时各字段为 null')
+
+  await env.store.setMeta({
+    lastStartError: 'qqbot: disconnected: 频率限制',
+    lastResumeError: 'resume failed: 会话不存在',
+    lastResumeSessionId: 'qq-1234567890',
+    lastIssueAt: 1_700_000_000_000,
+  })
+  state = (await call(env.webUi, { url: `${PAGE_PATH}/api/state` })).json().state
+  assert.deepEqual(state.issues, {
+    lastStartError: 'qqbot: disconnected: 频率限制',
+    lastResumeError: 'resume failed: 会话不存在',
+    lastResumeSessionId: 'qq-1234567890',
+    lastIssueAt: 1_700_000_000_000,
+  })
+
+  // 空串/非法时间戳按「没有」处理，避免页面显示空错误行
+  await env.store.setMeta({ lastStartError: '   ', lastIssueAt: Number.NaN })
+  state = (await call(env.webUi, { url: `${PAGE_PATH}/api/state` })).json().state
+  assert.equal(state.issues.lastStartError, null)
+  assert.equal(state.issues.lastIssueAt, null)
 })
 
 test('配置写入：身份与权限字段（pairingPolicy / controlPolicy）可保存', async () => {
@@ -297,7 +323,7 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
   assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
   assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'fields', 'groups', 'identity', 'lines', 'mode', 'models', 'pagePath', 'paths', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'pagePath', 'paths', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {

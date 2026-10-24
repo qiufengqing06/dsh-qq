@@ -3,6 +3,14 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.20
+
+- 媒体下载边界：默认拒绝回环/私网/链路本地/云元数据地址；重定向改为手动跟随、逐跳校验，
+  跨源重定向剥离鉴权头。
+- 新增 `media.allowedHosts`（自建/私网源白名单）、`media.allowPrivateHosts`、
+  `media.tokenHosts`（鉴权头白名单）、`media.maxRedirects`，控制台可改。
+- QQBot 的鉴权头默认只发给自身源站或 tokenHosts。
+
 ## v0.7.19
 
 - 多线路路由：出站支持显式 `transportKind/accountId` 提示；同一 target 跨线路时不再静默猜，

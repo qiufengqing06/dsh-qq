@@ -157,6 +157,11 @@ QQ 官方机器人**通常不向个人开发者开放群 @ 消息权限**，所�
       approvals: owner          # 登录与审批
     markdown: auto              # auto（按平台能力）| on | off
     maxFileBytes: 26214400      # 单文件上限（字节）
+    media:                      # 媒体下载边界（默认只允许公网；自建/私网源需显式列白名单）
+      allowedHosts: []          # host / host:port / *.example.com；命中后跳过私网拦截
+      allowPrivateHosts: false  # 打开后允许任意私网地址（风险自担）
+      tokenHosts: []            # 额外允许携带鉴权头的主机（默认只给自己源站）
+      maxRedirects: 3           # 重定向逐跳重新校验，最多几次
     midTurnDelivery: steer      # steer（默认，后面的消息进入正在跑的回合）| queue（各自排队）
     alerts:                     # 掉线提醒
       enabled: true

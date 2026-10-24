@@ -9,7 +9,7 @@ import { createStore } from '../lib/store.js'
 import { createMockTransport } from '../lib/mock.js'
 import { createGroupMemory } from '../lib/group-memory.js'
 import { createResourceScope } from '../lib/scope.js'
-import { createBridge, dshUiFencesToText, extractAssistantText, extractTurnError, lastEventSeq, stripDshUiFences, toPlainText } from '../lib/bridge.js'
+import { createBridge, dshUiFencesToText, extractAssistantText, extractTurnError, lastEventSeq, splitChatReply, stripDshUiFences, toPlainText } from '../lib/bridge.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
 const tick = (ms = 15) => new Promise(resolve => setTimeout(resolve, ms))
@@ -1244,6 +1244,45 @@ test('token 用量：assistant/message 的 usage 按对话记账（一轮多步�
   assert.equal(report.chats[0].turns, 2)
 })
 
+test('splitChatReply：短文本/代码块不拆，长回复拆成有限条', () => {
+  assert.deepEqual(splitChatReply(''), [])
+  assert.deepEqual(splitChatReply('短回复'), ['短回复'])
+  const fence = String.fromCharCode(96).repeat(3)
+  assert.deepEqual(splitChatReply(fence + 'js\nconsole.log(1)\n' + fence + '\n后面还有一句'), [fence + 'js\nconsole.log(1)\n' + fence + '\n后面还有一句'])
+  const long = '第一句话要稍微长一点，保证超过八十个字符的整体长度。第二句话也要稍微长一点，保证拆分后有内容。第三句话同样长一点，用来验证最多三条的上限。第四句话会被合并进最后一条。'
+  const bubbles = splitChatReply(long, 3)
+  assert.ok(bubbles.length >= 2 && bubbles.length <= 3, '应拆成 2–3 条')
+  assert.match(bubbles.at(-1), /第四句话/)
+})
+
+test('聊天模式：回复拆成多条，工作模式仍整段发送', async () => {
+  const sleeps = []
+  const { bridge, transport, agents, store } = await setup({}, {}, {}, {
+    sleep: async ms => { sleeps.push(ms) },
+    random: () => 0,
+  })
+  const ev = transport.injectText('聊聊')
+  await bridge.handleUserMessage(ev)
+  await store.setMode(ev.chatKey, 'chat')
+  const agent = agents.live.get(agents.created[0].sessionId)
+  agent.reply('第一句话要稍微长一点，保证整体长度超过八十个字符，这样才会触发拆分逻辑。第二句话也要稍微长一点，保证拆分之后每条都有实际内容。第三句话同样长一点，用来验证最多三条的上限。第四句话会被合并进最后一条。')
+  agent.ctx.emitStatus('idle')
+  await tick(30)
+  const texts = transport.dump().filter(entry => entry.kind === 'text')
+  assert.ok(texts.length >= 2, '聊天模式应拆成多条发送')
+  assert.equal(sleeps.includes(250), true, '首条前应有短暂 typing 停顿')
+  assert.equal(sleeps.some(ms => ms >= 600 && ms <= 1800), true, '条间延迟应在配置范围内')
+
+  const second = await setup()
+  const ev2 = second.transport.injectText('聊聊')
+  await second.bridge.handleUserMessage(ev2)
+  const agent2 = second.agents.live.get(second.agents.created[0].sessionId)
+  agent2.reply('第一句话要稍微长一点，保证整体长度超过八十个字符，这样才会触发拆分逻辑。第二句话也要稍微长一点，保证拆分之后每条都有实际内容。第三句话同样长一点，用来验证最多三条的上限。第四句话会被合并进最后一条。')
+  agent2.ctx.emitStatus('idle')
+  await tick(30)
+  assert.equal(second.transport.dump().filter(entry => entry.kind === 'text').length, 1, '工作模式保持整段一条')
+})
+
 test('会话提示词：setup 注册动态 section，保存后下一回合立即生效', async () => {
   const { bridge, transport, agents, store } = await setup({}, {}, { capabilities: { markdown: true } })
   await bridge.handleUserMessage(transport.injectText('ping'))
@@ -1258,8 +1297,10 @@ test('会话提示词：setup 注册动态 section，保存后下一回合立即
     },
   }
   await createdAgent.setup(agentCtx, {})
-  assert.equal(sections.length, 1)
+  assert.equal(sections.length, 2)
   assert.equal(sections[0].name, 'dsh-qq:chat-prompt')
+  assert.equal(sections[1].name, 'dsh-qq/chat-mode')
+  assert.equal(sections[1].text(), '', '工作模式不注入聊天风格')
   assert.equal(sections[0].text(), '', '未设置时不注入')
 
   const chatKey = store.chatKeys()[0]
@@ -1273,4 +1314,8 @@ test('会话提示词：setup 注册动态 section，保存后下一回合立即
   await store.bindPersona(chatKey, 'tech')
   assert.equal(sections[0].text(), '你只聊技术。', '绑定人设优先，下一回合生效')
   assert.equal(store.effectivePromptFor(chatKey).source, 'binding')
+
+  await store.setMode(chatKey, 'chat')
+  assert.match(sections[1].text(), /聊天模式/)
+  assert.equal(sections[1].interpolate, false)
 })

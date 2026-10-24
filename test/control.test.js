@@ -64,6 +64,19 @@ test('/qq-status 反映传输与状态', async () => {
   assert.match(degradedReply, /unavailable/)
 })
 
+test('/qq-mode：work/chat 切换、查看与权限', async () => {
+  const { control, store } = await setup()
+  const chatKey = 'mock:acct:dm:u1'
+  assert.match((await run(control, '/qq-mode')).reply, /当前模式：工作/)
+  assert.match((await run(control, '/qq-mode chat')).reply, /已切换到聊天模式/)
+  assert.equal(store.modeFor(chatKey), 'chat')
+  assert.match((await run(control, '/qq-mode')).reply, /当前模式：聊天/)
+  assert.match((await run(control, '/qq-mode work')).reply, /已切回工作模式/)
+  assert.equal(store.modeFor(chatKey), 'work')
+  assert.match((await run(control, '/qq-mode nope')).reply, /用法/)
+  assert.match((await run(control, '/qq-mode chat', 'authorized')).reply, /无权限执行/)
+})
+
 test('/qq-persona：list/show/use/clear/set 与权限', async () => {
   const { control, store } = await setup()
   const chatKey = 'mock:acct:dm:u1'

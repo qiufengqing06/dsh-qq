@@ -450,3 +450,18 @@ test('人设库：跨重启保留', async () => {
   assert.equal(second.effectivePromptFor('qqbot:1:dm:u').text, '只聊技术')
   assert.equal(second.defaultPersonaId(), 'tech')
 })
+
+test('对话模式：默认 work，切换 chat 后跨重启保留', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-mode-'))
+  const first = createStore({ dir })
+  await first.load()
+  assert.equal(first.modeFor('qqbot:1:dm:u'), 'work')
+  await first.setMode('qqbot:1:dm:u', 'chat')
+  assert.equal(first.modeFor('qqbot:1:dm:u'), 'chat')
+  await assert.rejects(() => first.setMode('qqbot:1:dm:u', 'nope'), /mode must be work or chat/)
+
+  const second = createStore({ dir })
+  await second.load()
+  assert.equal(second.modeFor('qqbot:1:dm:u'), 'chat')
+  assert.equal(second.modeFor('qqbot:1:dm:other'), 'work')
+})

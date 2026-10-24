@@ -56,6 +56,28 @@ test('downloadHttp：成功返回数据与类型；超限/HTTP 错误分类正�
   assert.notEqual(notFound.retryable, true, '404 重试没意义')
 })
 
+test('downloadHttp：没有 content-length 的大响应流式读取，超限立刻停止', async () => {
+  let pulls = 0
+  const stream = new ReadableStream({
+    pull(controller) {
+      pulls += 1
+      if (pulls > 100) {
+        controller.close()
+        return
+      }
+      controller.enqueue(new Uint8Array(10))
+    },
+  })
+  const result = await downloadHttp({
+    url: 'https://x.invalid/stream',
+    maxBytes: 25,
+    fetchImpl: async () => new Response(stream, { status: 200 }),
+  })
+  assert.equal(result.ok, false)
+  assert.match(result.error, /超过上限/)
+  assert.ok(pulls <= 5, `超限后应停止拉取（实际拉了 ${pulls} 次）`)
+})
+
 test('downloadHttp：服务器不响应时超时失败（retryable）', async () => {
   // 模拟「连接建立但永不返回数据」：fetch 永不 resolve，只响应 abort
   const hangingFetch = (url, options) => new Promise((resolve, reject) => {

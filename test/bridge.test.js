@@ -191,11 +191,24 @@ test('recentChat / status / chatKeyForSession', async () => {
   assert.equal(bridge.recentChat(), null)
   const ev = transport.injectText('hi', { target: { kind: 'group', groupId: 'g1' } })
   await bridge.handleUserMessage(ev)
-  assert.deepEqual(bridge.recentChat(), { kind: 'group', id: 'g1' })
+  assert.deepEqual(bridge.recentChat(), { kind: 'group', id: 'g1', transportKind: 'mock', accountId: 'mock' })
   const sessionId = agents.created[0].sessionId
   assert.equal(bridge.chatKeyForSession(sessionId), ev.chatKey)
   assert.equal(bridge.targetForChat(ev.chatKey).groupId, 'g1')
   assert.deepEqual(bridge.status(), { chats: 1, pending: 1, sessions: 1 })
+})
+
+test('重启后审批仍能解析 session→chat 与 target（store 回落）', async () => {
+  const { config, store, transport, ctx, scope } = await setup()
+  const ev = transport.injectText('x')
+  const chatKey = ev.chatKey
+  await store.setCurrentSession(chatKey, 'qq-old-session', {})
+  await store.touch(chatKey, { target: { kind: 'p2p', id: 'mock-user' } })
+
+  // 新 bridge = 插件刚重启：runtime/sessionIndex 都是空的
+  const reopened = createBridge({ ctx, config, store, transport, scope })
+  assert.equal(reopened.chatKeyForSession('qq-old-session'), chatKey, '应能按 store 反查 chatKey')
+  assert.deepEqual(reopened.targetForChat(chatKey), ev.target, '应能从 chatKey 还原 target')
 })
 
 test('extractAssistantText：只取新事件、兼容两种载体、拼接多块', () => {
@@ -789,7 +802,11 @@ test('recentChat：切换 transport 后优先返回当前协议的历史对话�
   await store.touch('qqbot:1905346673:dm:OPENID-OLD', { target: { kind: 'p2p', id: 'OPENID-OLD' }, at: 1 })
   await store.touch(ev.chatKey, { target: { kind: 'p2p', id: 'mock-user' }, at: 2 })
 
-  assert.deepEqual(bridge.recentChat(), { kind: 'p2p', id: 'mock-user' }, '应优先当前 transport 的目标')
+  assert.deepEqual(
+    bridge.recentChat(),
+    { kind: 'p2p', id: 'mock-user', transportKind: 'mock', accountId: 'mock' },
+    '应优先当前 transport 的目标（并带上线路提示）',
+  )
 })
 
 test('群聊说话人标签：昵称 sanitize + 带 QQ 号（昵称是外部可控数据，不能原样进 prompt）', async () => {

@@ -3,6 +3,12 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.21
+
+- 修复 `agentPresets.mount` 解绑调用：真实服务是类方法，内部依赖 `this.retain()`；
+  解绑后重启会报 `Cannot read properties of undefined (reading 'retain')`，导致所有 QQ 会话
+  新建/恢复失败（控制台显示「DSH 会话创建失败」）。
+
 ## v0.7.20
 
 - 媒体下载边界：默认拒绝回环/私网/链路本地/云元数据地址；重定向改为手动跟随、逐跳校验，

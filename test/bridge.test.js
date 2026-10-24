@@ -236,7 +236,7 @@ test('会话级 agentOptions 透传给 create', async () => {
 function createFakePresets({ defaultId = 'preset-default', failResolve = false } = {}) {
   const mounted = []
   const resolved = []
-  return {
+  const presets = {
     defaultId,
     mounted,
     resolved,
@@ -247,9 +247,12 @@ function createFakePresets({ defaultId = 'preset-default', failResolve = false }
       return { id: want }
     },
     async mount(agentCtx, id) {
+      // 真实服务是类方法，内部用 this.retain()；解绑调用会在这里暴露
+      if (this !== presets) throw new TypeError("Cannot read properties of undefined (reading 'retain')")
       mounted.push({ agentCtx, id })
     },
   }
+  return presets
 }
 
 /** 假 sessionQuery：按 sessionId 返回观察（含 header.agentPreset），缺失抛 NOT_FOUND。 */

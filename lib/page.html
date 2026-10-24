@@ -1197,24 +1197,170 @@
     return box;
   }
 
+  var personaEditing = '';
+  var personaDraft = null;
+
+  function personaById(id) {
+    var list = Array.isArray(S.personas) ? S.personas : [];
+    for (var i = 0; i < list.length; i += 1) if (list[i].id === id) return list[i];
+    return null;
+  }
+
+  function personaNameOf(id) {
+    var hit = personaById(id);
+    return hit === null ? id : hit.name;
+  }
+
+  /** 人设 API：成功后重新拉状态（页面其它卡片也跟着刷新）。 */
+  function personaAction(payload, message) {
+    return api('/dsh-qq/api/personas', payload).then(function (res) {
+      if (!res.data || res.data.ok !== true) {
+        notice((res.data && res.data.error) || '人设操作失败', 'bad');
+        return false;
+      }
+      if (message) notice(message, 'info');
+      load();
+      return true;
+    }).catch(function (error) { notice(String(error.message || error), 'bad'); return false; });
+  }
+
+  function startPersonaEdit(id) {
+    if (id === '') {
+      personaEditing = '@new';
+      personaDraft = { id: '', name: '', text: '' };
+      renderPrompts();
+      return;
+    }
+    api('/dsh-qq/api/personas?id=' + encodeURIComponent(id)).then(function (res) {
+      if (!res.data || res.data.ok !== true) { notice((res.data && res.data.error) || '读取人设失败', 'bad'); return; }
+      personaEditing = id;
+      personaDraft = res.data.persona;
+      renderPrompts();
+    }).catch(function (error) { notice(String(error.message || error), 'bad'); });
+  }
+
+  function personaEditor() {
+    var draft = personaDraft || { id: '', name: '', text: '' };
+    var editingExisting = personaEditing !== '@new';
+    var box = el('div', { className: 'group-editor' });
+    var idInput = el('input', {
+      type: 'text',
+      id: 'persona-id',
+      'aria-label': '人设 id',
+      placeholder: 'id：小写字母/数字/下划线/短横线，例如 tech',
+      value: draft.id || ''
+    });
+    if (editingExisting) idInput.disabled = true;
+    var nameInput = el('input', { type: 'text', id: 'persona-name', 'aria-label': '人设名称', placeholder: '名称，例如 技术顾问', value: draft.name || '' });
+    var textarea = el('textarea', { id: 'persona-text', 'aria-label': '人设内容', placeholder: '人设文本（最多 4000 字）' });
+    textarea.value = draft.text || '';
+    var count = el('span', { className: 'hint' });
+    var refresh = function () { count.textContent = textarea.value.length + ' / ' + (S.promptLimit || 4000) + ' 字'; };
+    textarea.addEventListener('input', refresh);
+    refresh();
+    box.appendChild(el('div', { style: 'display:grid;grid-template-columns:160px 1fr;gap:10px' }, [idInput, nameInput]));
+    box.appendChild(textarea);
+    var actions = el('div', { className: 'row' }, [
+      count,
+      el('div', { className: 'hint', text: '保存后下一回合生效；绑定到对话会覆盖该对话的旧提示词。' }),
+      btn('保存', 'primary sm', function () {
+        personaAction({
+          action: 'save',
+          id: idInput.value.trim(),
+          name: nameInput.value.trim(),
+          text: textarea.value
+        }, '人设已保存').then(function (ok) {
+          if (ok) { personaEditing = ''; personaDraft = null; renderPrompts(); }
+        });
+      }),
+      btn('取消', 'quiet sm', function () { personaEditing = ''; personaDraft = null; renderPrompts(); })
+    ]);
+    if (editingExisting) {
+      actions.appendChild(btn('删除', 'quiet sm', function () {
+        if (!window.confirm('删除人设「' + (draft.name || draft.id) + '」？绑定到它的对话会回落到默认人设。')) return;
+        personaAction({ action: 'delete', id: draft.id }, '人设已删除').then(function (ok) {
+          if (ok) { personaEditing = ''; personaDraft = null; renderPrompts(); }
+        });
+      }));
+    }
+    box.appendChild(actions);
+    return box;
+  }
+
+  function renderPersonaBlock(host) {
+    var personas = Array.isArray(S.personas) ? S.personas : [];
+    var defaultId = S.defaultPersonaId || '';
+    host.appendChild(el('div', { className: 'usage-panel-title', text: '人设库' }));
+    host.appendChild(el('div', {
+      style: 'font-size:11.5px;color:var(--muted);margin:0 0 8px',
+      text: '命名人设可绑定到指定对话；未绑定则回落到默认人设/旧提示词。'
+    }));
+
+    var head = el('div', { className: 'actions', style: 'margin-bottom:8px' });
+    var defaultSelect = el('select', { 'aria-label': '默认人设', style: 'width:210px' });
+    defaultSelect.appendChild(el('option', { value: '', text: '默认人设：无（用旧默认提示词）' }));
+    personas.forEach(function (item) {
+      defaultSelect.appendChild(el('option', { value: item.id, text: '默认人设：' + item.name + '（' + item.id + '）' }));
+    });
+    defaultSelect.value = defaultId;
+    defaultSelect.addEventListener('change', function () {
+      personaAction({ action: 'setDefault', id: defaultSelect.value }, '默认人设已更新');
+    });
+    head.appendChild(defaultSelect);
+    head.appendChild(btn('新建人设', 'sm', function () { startPersonaEdit(''); }));
+    host.appendChild(head);
+
+    if (personas.length === 0) {
+      host.appendChild(el('div', { className: 'empty', text: '人设库为空。新建一个，或让机器人用 /qq-persona set <id> <文本>。' }));
+    } else {
+      personas.forEach(function (item) {
+        host.appendChild(el('div', { className: 'group-row' }, [
+          el('div', { className: 'grow' }, [
+            el('div', { className: 'name', text: item.name }),
+            el('div', { className: 'sub mono', text: item.id + ' · ' + item.chars + ' 字' })
+          ]),
+          item.id === defaultId ? pill('默认', 'ok', false) : null,
+          btn('编辑', 'sm', function () { startPersonaEdit(item.id); }),
+          item.id === defaultId ? null : btn('设为默认', 'quiet sm', function () {
+            personaAction({ action: 'setDefault', id: item.id }, '默认人设已更新');
+          })
+        ]));
+      });
+    }
+    if (personaEditing !== '') host.appendChild(personaEditor());
+  }
+
   function renderPrompts() {
     var host = document.getElementById('prompts');
     if (!host) return;
     host.textContent = '';
     var prompt = S.prompt || {};
     var overrides = prompt.chats || {};
+    var bindings = S.personaBindings || {};
     var defaultText = prompt.default || '';
+    var defaultPersona = personaById(S.defaultPersonaId || '');
     var badge = document.getElementById('badge-prompts');
-    var overrideCount = Object.keys(overrides).length;
+    var overrideCount = Object.keys(overrides).length + Object.keys(bindings).length;
     if (badge) badge.textContent = overrideCount === 0 ? '默认' : String(overrideCount);
     var note = document.getElementById('prompts-note');
-    if (note) note.textContent = defaultText !== '' ? '默认已设置' : '默认跟随 DSH';
+    if (note) {
+      note.textContent = defaultPersona !== null
+        ? '默认人设：' + defaultPersona.name
+        : defaultText !== '' ? '旧默认提示词已设置' : '默认跟随 DSH';
+    }
 
-    // 默认（bot 级）
+    renderPersonaBlock(host);
+
+    // 旧默认提示词（保留兼容；默认人设存在时它不会生效）
     host.appendChild(el('div', { className: 'group-row' }, [
       el('div', { className: 'grow' }, [
-        el('div', { className: 'name', text: '默认（所有 QQ 对话）' }),
-        el('div', { className: 'sub', text: defaultText === '' ? '未设置：所有对话都只用 DSH 的默认人设' : defaultText.slice(0, 80) + (defaultText.length > 80 ? '…' : '') })
+        el('div', { className: 'name', text: '旧默认提示词（旧字段）' }),
+        el('div', {
+          className: 'sub',
+          text: defaultPersona !== null
+            ? '已有默认人设，本字段不生效；清空默认人设后才会回落到这里'
+            : defaultText === '' ? '未设置：所有对话都只用 DSH 的默认人设' : defaultText.slice(0, 80) + (defaultText.length > 80 ? '…' : '')
+        })
       ]),
       pill(defaultText === '' ? '未设置' : '已设置', defaultText === '' ? 'neutral' : 'ok', false),
       btn('编辑', 'sm', function () { promptEditing = '@default'; renderPrompts(); }),
@@ -1223,27 +1369,40 @@
     // chatKey 传空串 = 默认作用域；@default 只是本地展开状态，不能当 chatKey 提交（后端会拒绝）
     if (promptEditing === '@default') host.appendChild(promptEditor('', defaultText));
 
-    // 已知对话 + 已有覆盖的对话
+    // 已知对话 + 已有覆盖/绑定的对话
     var keys = [];
     var seen = {};
     (Array.isArray(S.chatKeys) ? S.chatKeys : []).forEach(function (key) { if (!seen[key]) { seen[key] = true; keys.push(key); } });
     Object.keys(overrides).forEach(function (key) { if (!seen[key]) { seen[key] = true; keys.push(key); } });
+    Object.keys(bindings).forEach(function (key) { if (!seen[key]) { seen[key] = true; keys.push(key); } });
     var list = el('div', { style: 'margin-top:16px' });
-    list.appendChild(el('div', { className: 'usage-panel-title', text: '按对话设置' }));
+    list.appendChild(el('div', { className: 'usage-panel-title', text: '按对话绑定' }));
     if (keys.length === 0) {
       list.appendChild(el('div', { className: 'empty', text: '还没有已知对话。给机器人发一条消息后，群/私聊会出现在这里；也可以手动填对话标识。' }));
     } else {
       keys.forEach(function (key) {
         var info = promptLabel(key);
         var own = overrides[key] || '';
-        list.appendChild(el('div', { className: 'group-row' }, [
+        var bound = bindings[key] && bindings[key].personaId ? bindings[key].personaId : '';
+        var bindSelect = el('select', { 'aria-label': '对话人设绑定', style: 'width:150px' });
+        bindSelect.appendChild(el('option', { value: '', text: '跟随默认人设' }));
+        (Array.isArray(S.personas) ? S.personas : []).forEach(function (item) {
+          bindSelect.appendChild(el('option', { value: item.id, text: item.name + '（' + item.id + '）' }));
+        });
+        bindSelect.value = bound;
+        bindSelect.addEventListener('change', function () {
+          if (bindSelect.value === '') personaAction({ action: 'unbind', chatKey: key }, '已取消对话绑定');
+          else personaAction({ action: 'bind', chatKey: key, personaId: bindSelect.value }, '已绑定人设');
+        });
+        list.appendChild(el('div', { className: 'group-row', style: 'flex-wrap:wrap;gap:8px' }, [
           el('div', { className: 'grow' }, [
             el('div', { className: 'name', text: info.label }),
             el('div', { className: 'sub mono', text: key })
           ]),
           el('span', { className: 'pill neutral', text: info.kind }),
-          pill(own === '' ? '跟随默认' : '已单独设置', own === '' ? 'neutral' : 'ok', false),
-          btn('编辑', 'sm', function () { promptEditing = key; renderPrompts(); }),
+          bindSelect,
+          bound !== '' ? pill('人设', 'ok', false) : pill(own === '' ? '跟随默认' : '旧提示词', own === '' ? 'neutral' : 'warn', false),
+          btn('编辑旧提示词', 'sm', function () { promptEditing = key; renderPrompts(); }),
           own === '' ? null : btn('清除', 'quiet sm', function () { savePrompt(key, ''); })
         ]));
         if (promptEditing === key) list.appendChild(promptEditor(key, own));

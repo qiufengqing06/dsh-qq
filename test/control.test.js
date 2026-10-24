@@ -64,6 +64,27 @@ test('/qq-status 反映传输与状态', async () => {
   assert.match(degradedReply, /unavailable/)
 })
 
+test('/qq-persona：list/show/use/clear/set 与权限', async () => {
+  const { control, store } = await setup()
+  const chatKey = 'mock:acct:dm:u1'
+
+  assert.match((await run(control, '/qq-persona list')).reply, /人设库为空/)
+  assert.match((await run(control, '/qq-persona set tech 你只聊技术')).reply, /人设已保存/)
+  assert.match((await run(control, '/qq-persona list')).reply, /tech/)
+  assert.match((await run(control, '/qq-persona show')).reply, /未设置/)
+
+  assert.match((await run(control, '/qq-persona use tech')).reply, /已切换/)
+  assert.equal(store.effectivePromptFor(chatKey).source, 'binding')
+  assert.match((await run(control, '/qq-persona show')).reply, /技术/, 'show 应展示绑定的内容')
+  assert.match((await run(control, '/qq-persona clear')).reply, /已清除/)
+  assert.equal(store.effectivePromptFor(chatKey).source, 'none')
+
+  // 普通授权用户：list/show 可用，use/clear/set 被拒
+  assert.match((await run(control, '/qq-persona list', 'authorized')).reply, /tech/)
+  assert.match((await run(control, '/qq-persona use tech', 'authorized')).reply, /无权限切换/)
+  assert.match((await run(control, '/qq-persona set bad x', 'authorized')).reply, /无权限管理/)
+})
+
 test('会话命令：sessions / switch / new / stop', async () => {
   const { control, bridge, tp, agents } = await setup()
   const ev = tp.injectText('hi')

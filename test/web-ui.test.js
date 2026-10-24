@@ -178,8 +178,9 @@ async function setup(overrides = {}) {
   const transport = {
     // 机器人资料：官方线用它在页面显示昵称 + 头像（走注册表 entries，与生产装配一致）
     sentTestMessages: [],
+    // 与真实注册表一致：forKind 返回 { kind, transport, config }，不是 transport 本身
     forKind: kind => (kind === 'mock' || kind === 'qqbot'
-      ? { sendText: async (target, text) => { transport.sentTestMessages.push({ target, text }); return { ok: true, messageId: 'tm-1' } } }
+      ? { kind, transport: { sendText: async (target, text) => { transport.sentTestMessages.push({ target, text }); return { ok: true, messageId: 'tm-1' } } } }
       : null),
     entries: overrides.getProfile === null
       ? []
@@ -235,7 +236,7 @@ test('页面：自包含 HTML（无外部资源），含线路/凭据/身份/配
   const res = await call(env.webUi, { url: PAGE_PATH })
   assert.equal(res.code, 200)
   assert.match(res.headers['content-type'], /text\/html/)
-  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题']) {
+  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库']) {
     assert.ok(res.body.includes(marker), `页面应包含 ${marker}`)
   }
   // 页面必须自包含：除本机地址外不得有外部 URL，也不得外链脚本/样式
@@ -268,6 +269,49 @@ test('状态：最近错误诊断字段透传（启动/恢复失败）', async (
   state = (await call(env.webUi, { url: `${PAGE_PATH}/api/state` })).json().state
   assert.equal(state.issues.lastStartError, null)
   assert.equal(state.issues.lastIssueAt, null)
+})
+
+test('人设库：state 元数据、正文 GET、增删默认绑定接口', async () => {
+  const env = await setup()
+  const chatKey = 'qqbot:1905346673:group:90001'
+  await env.store.setPersona('tech', { name: '技术顾问', text: '你只聊技术。' })
+  await env.store.setPersona('cute', { name: '可爱助手', text: '说话可爱一点。' })
+  await env.store.setDefaultPersona('tech')
+  await env.store.bindPersona(chatKey, 'cute')
+
+  const state = (await call(env.webUi, { url: `${PAGE_PATH}/api/state` })).json().state
+  assert.deepEqual(state.personas.map(item => item.id).sort(), ['cute', 'tech'])
+  assert.equal(state.defaultPersonaId, 'tech')
+  assert.equal(state.personaBindings[chatKey].personaId, 'cute')
+  assert.equal(state.personas.find(item => item.id === 'tech').chars, '你只聊技术。'.length, 'state 只带元数据，不带正文')
+
+  const one = await call(env.webUi, { url: `${PAGE_PATH}/api/personas?id=tech` })
+  assert.equal(one.code, 200)
+  assert.equal(one.json().persona.text, '你只聊技术。')
+  assert.equal((await call(env.webUi, { url: `${PAGE_PATH}/api/personas?id=nope` })).code, 404)
+
+  const saved = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'save', id: 'qa', name: '问答', text: '回答要短。' } })
+  assert.equal(saved.code, 200, saved.body)
+  assert.equal(env.store.personaOf('qa').name, '问答')
+
+  const badBind = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'bind', chatKey: 'not-a-chat-key', personaId: 'tech' } })
+  assert.equal(badBind.code, 400, '非法 chatKey 应返回 400')
+
+  const bound = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'bind', chatKey, personaId: 'tech' } })
+  assert.equal(bound.json().ok, true)
+  assert.equal(env.store.personaBinding(chatKey), 'tech')
+
+  const unbind = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'unbind', chatKey } })
+  assert.equal(unbind.json().ok, true)
+  assert.equal(env.store.personaBinding(chatKey), '')
+
+  const def = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'setDefault', id: 'qa' } })
+  assert.equal(def.json().ok, true)
+  assert.equal(env.store.defaultPersonaId(), 'qa')
+
+  const del = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'delete', id: 'qa' } })
+  assert.equal(del.json().ok, true)
+  assert.equal(env.store.personaOf('qa'), null)
 })
 
 test('配置写入：身份与权限字段（pairingPolicy / controlPolicy）可保存', async () => {
@@ -323,7 +367,7 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
   assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
   assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'pagePath', 'paths', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'pagePath', 'paths', 'personaBindings', 'personas', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {

@@ -1267,4 +1267,10 @@ test('会话提示词：setup 注册动态 section，保存后下一回合立即
   assert.equal(sections[0].text(), '你是群助手', '动态函数：默认值立即生效')
   await store.setChatPrompt(chatKey, '这个群只聊技术')
   assert.equal(sections[0].text(), '这个群只聊技术', '对话覆盖优先，且无需重建会话')
+  assert.equal(sections[0].interpolate, false, '人设文本不做变量插值（未知变量会让组装失败）')
+
+  await store.setPersona('tech', { name: '技术顾问', text: '你只聊技术。' })
+  await store.bindPersona(chatKey, 'tech')
+  assert.equal(sections[0].text(), '你只聊技术。', '绑定人设优先，下一回合生效')
+  assert.equal(store.effectivePromptFor(chatKey).source, 'binding')
 })

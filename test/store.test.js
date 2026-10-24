@@ -361,3 +361,92 @@ test('会话提示词：默认/按对话覆盖/清除/长度上限/重启不丢'
   assert.equal(reloaded.defaultPrompt(), '你是群助手，回答简短。')
   assert.equal(reloaded.promptFor('qqbot:1:group:2'), '持久化')
 })
+
+// ── 命名人设库 + 对话绑定 ──
+
+test('人设库：保存/默认/绑定/解绑，生效来源可追踪', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-persona-'))
+  const store = createStore({ dir })
+  await store.load()
+  const chatKey = 'qqbot:1:group:g1'
+
+  await store.setPersona('tech', { name: '技术顾问', text: '你只聊技术。' })
+  await store.setPersona('cute', { name: '可爱助手', text: '说话可爱一点。' })
+  assert.equal(store.personaList().length, 2)
+  assert.equal(store.effectivePromptFor(chatKey).source, 'none')
+
+  await store.setDefaultPersona('tech')
+  assert.deepEqual(store.effectivePromptFor(chatKey), {
+    text: '你只聊技术。',
+    source: 'defaultPersona',
+    personaId: 'tech',
+    personaName: '技术顾问',
+  })
+
+  await store.bindPersona(chatKey, 'cute')
+  assert.equal(store.personaBinding(chatKey), 'cute')
+  assert.equal(store.effectivePromptFor(chatKey).text, '说话可爱一点。')
+  assert.equal(store.effectivePromptFor(chatKey).source, 'binding')
+
+  // 旧对话提示词写入会清绑定；绑定会清旧对话提示词
+  await store.setChatPrompt(chatKey, '这是旧覆盖。')
+  assert.equal(store.personaBinding(chatKey), '', '显式写对话提示词应解除人设绑定')
+  assert.equal(store.effectivePromptFor(chatKey).source, 'chat')
+
+  await store.bindPersona(chatKey, 'tech')
+  assert.equal(store.chatPrompt(chatKey), '', '绑定人设应清掉旧对话提示词')
+  assert.equal(store.effectivePromptFor(chatKey).source, 'binding')
+
+  // 删除人设会清默认引用与绑定
+  assert.equal(await store.removePersona('tech'), true)
+  assert.equal(store.defaultPersonaId(), '')
+  assert.equal(store.personaBinding(chatKey), '')
+  assert.equal(store.effectivePromptFor(chatKey).source, 'none')
+})
+
+test('人设库：id/空文本/超长校验，非法数据在加载时被丢弃', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-persona-invalid-'))
+  const store = createStore({ dir })
+  await store.load()
+  await assert.rejects(() => store.setPersona('Bad ID', { text: 'x' }), /人设 id/)
+  await assert.rejects(() => store.setPersona('ok', { text: '   ' }), /不能为空/)
+  await assert.rejects(() => store.setPersona('ok', { text: 'x'.repeat(4001) }), /人设太长/)
+  await assert.rejects(() => store.setDefaultPersona('missing'), /人设不存在/)
+
+  await writeFile(store.file, JSON.stringify({
+    version: 1,
+    chats: {},
+    pairing: { policy: 'pairing', roles: {}, pending: [] },
+    meta: {},
+    activity: {},
+    usage: {},
+    approvals: [],
+    prompt: { default: '', chats: {} },
+    personas: {
+      good: { name: 'G', text: 'hi', updatedAt: 1 },
+      'Bad ID': { name: 'B', text: 'x' },
+      empty: { name: 'E', text: '   ' },
+    },
+    defaultPersonaId: 'missing',
+    personaBindings: { 'qqbot:1:dm:u': { personaId: 'missing' }, 'qqbot:1:dm:v': { personaId: 'good' } },
+  }, null, 2), 'utf8')
+  const reloaded = createStore({ dir })
+  await reloaded.load()
+  assert.deepEqual(reloaded.personaList().map(item => item.id), ['good'])
+  assert.equal(reloaded.defaultPersonaId(), '')
+  assert.deepEqual(Object.keys(reloaded.personaBindings()), ['qqbot:1:dm:v'])
+})
+
+test('人设库：跨重启保留', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-persona-reload-'))
+  const first = createStore({ dir })
+  await first.load()
+  await first.setPersona('tech', { name: '技术', text: '只聊技术' })
+  await first.setDefaultPersona('tech')
+  await first.bindPersona('qqbot:1:dm:u', 'tech')
+
+  const second = createStore({ dir })
+  await second.load()
+  assert.equal(second.effectivePromptFor('qqbot:1:dm:u').text, '只聊技术')
+  assert.equal(second.defaultPersonaId(), 'tech')
+})

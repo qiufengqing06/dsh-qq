@@ -42,6 +42,8 @@ dsh plugin --profile web remove dsh-qq
 
 也可以在 DSH Web 侧边栏的「插件」页安装、启停或删除（安装框里填 `github:qiufengqing06/dsh-qq`）。
 
+> 本项目**不发布 npm**（`dsh-qq` 包名已被他人占用）：请用上面的 GitHub 或本地目录安装方式。
+
 > 注意：**不要直接粘贴 `git@github.com:owner/repo.git` 这种 SSH 地址** —— pnpm 会把它解析成
 > 「名为 `git` 的包」，DSH 接着会报 `cannot resolve profile bundle "git"`。需要写完整 URL 时用
 > `git+ssh://git@github.com/qiufengqing06/dsh-qq.git`。

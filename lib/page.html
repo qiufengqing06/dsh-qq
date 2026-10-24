@@ -1181,7 +1181,7 @@
 
   function promptEditor(chatKey, current) {
     var box = el('div', { className: 'group-editor' });
-    var textarea = el('textarea', { id: 'prompt-editor-text', placeholder: '留空并保存 = 清除（回落到默认）' });
+    var textarea = el('textarea', { id: 'prompt-editor-text', 'aria-label': '提示词内容', placeholder: '留空并保存 = 清除（回落到默认）' });
     textarea.value = current || '';
     var count = el('span', { className: 'hint' });
     var refresh = function () { count.textContent = textarea.value.length + ' / ' + (S.promptLimit || 4000) + ' 字'; };

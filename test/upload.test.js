@@ -104,6 +104,26 @@ test('chunkedUpload：prepare → 分片 PUT → part_finish → files{upload_id
   assert.equal(api.calls.complete, 1)
 })
 
+test('chunkedUpload：signal 已中止时失败，绝不带着缺失分片去 complete', async () => {
+  const data = Buffer.from('01234567')
+  const api = createApiRequest({ prepare: prepareFor(data.byteLength, 4) })
+  const controller = new AbortController()
+  controller.abort()
+  const result = await chunkedUpload({
+    data,
+    fileName: 'abort.bin',
+    fileType: 4,
+    targetKind: 'dm',
+    targetId: 'u1',
+    signal: controller.signal,
+    apiRequest: api.apiRequest,
+    fetchImpl: async () => ({ ok: true, status: 200 }),
+  })
+  assert.equal(result.ok, false)
+  assert.match(result.error, /取消/)
+  assert.equal(api.calls.complete, 0, '中止后不得提交 complete')
+})
+
 test('chunkedUpload：最后一篇短分片长度正确（不越界）', async () => {
   const data = Buffer.from('0123456789') // 10 字节，block 4 → 4/4/2
   const api = createApiRequest({ prepare: prepareFor(data.byteLength, 4) })

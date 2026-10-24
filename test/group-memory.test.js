@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -107,6 +107,30 @@ test('群笔记：add/replace/remove、去重、按群隔离，并落盘可跨�
   assert.match(await reloaded.notesOf(GROUP), /堂主/)
   const file = await readFile(join(dir, 'groups', `${GROUP.replace(/[^A-Za-z0-9_.-]+/g, '_')}.md`), 'utf8')
   assert.match(file, /群记忆（由 dsh-qq 维护，可手工编辑）/)
+})
+
+test('并发写同一群笔记：页面与模型同时写不丢更新', async () => {
+  const { memory, dir } = await setup()
+  await Promise.all([
+    memory.editNotes(GROUP, { action: 'add', text: '第一条并发写入' }),
+    memory.editNotes(GROUP, { action: 'add', text: '第二条并发写入' }),
+  ])
+  let content = await memory.notesOf(GROUP)
+  assert.match(content, /第一条并发写入/)
+  assert.match(content, /第二条并发写入/, '并发 add 不能互相覆盖')
+
+  // 页面整篇写入与模型工具并发：锁必须覆盖两种入口
+  const file = memory.fileNameOf(GROUP)
+  await Promise.all([
+    memory.writeNoteFile(file, '# 群记忆（由 dsh-qq 维护，可手工编辑）\n- 页面整篇写入\n'),
+    memory.editNotes(GROUP, { action: 'add', text: '第三条并发写入' }),
+  ])
+  content = await memory.notesOf(GROUP)
+  assert.match(content, /页面整篇写入/)
+  assert.match(content, /第三条并发写入/)
+
+  const files = await readdir(join(dir, 'groups'))
+  assert.equal(files.some(name => name.includes('.tmp-')), false, '不得残留临时文件')
 })
 
 test('群笔记：容量是硬闸门，写超了不落盘并给出可操作提示', async () => {

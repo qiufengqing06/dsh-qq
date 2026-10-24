@@ -3,6 +3,14 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.18
+
+- 群记忆：同一笔记的「读 → 改 → 写」按文件串行，临时文件名加随机后缀；页面编辑与模型
+  工具并发写不再互相覆盖。
+- 分片上传：signal 中止时如实失败，不再带着缺失分片去 complete 并返回 ok。
+- 控制台：提示词编辑器补 aria-label；README 注明不发布 npm。
+- 移除 `qqbot.js` 的死代码（`chatKeyOf` / `_reloadCredentials`）。
+
 ## v0.7.17
 
 - 修复 `pairingPolicy: allowlist` 退化成 pairing：陌生人现在直接拒绝，不写待批、不通知管理员。

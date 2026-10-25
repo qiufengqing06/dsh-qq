@@ -67,6 +67,10 @@ test('log：只记录，永不唤醒', () => {
   const env1 = env({ participation: { mode: 'log' } })
   assert.equal(env1.p.shouldWake(ev('这个报错怎么修呀')), false)
   assert.equal(env1.p.evaluate(ev('这个报错怎么修呀')).skipped, 'log')
+  const snap = env1.p.snapshot()
+  assert.equal(snap.mode, 'log')
+  assert.equal(snap.recent.length, 2)
+  assert.equal(snap.recent[0].skipped, 'log')
 })
 
 test('明确静默：对话暂停/成员暂停时不唤醒', () => {

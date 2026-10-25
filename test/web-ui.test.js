@@ -233,12 +233,12 @@ test('降级：没有 webServer 服务时静默跳过（插件照常工作）', 
 
 test('页面：自包含 HTML（无外部资源），含线路/凭据/身份/配置容器与 CSRF 头', async () => {
   const env = await setup()
- const res = await call(env.webUi, { url: PAGE_PATH })
+const res = await call(env.webUi, { url: PAGE_PATH })
  assert.equal(res.code, 200)
   assert.match(res.headers['content-type'], /text\/html/)
-  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库', '对话模式', '模式切换暂不可用']) {
+  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库', '对话模式', '模式切换暂不可用', 'id="stickers"', '表情包', 'id="chat-control"', '聊天控制']) {
     assert.ok(res.body.includes(marker), `页面应包含 ${marker}`)
-  }
+ }
   // 页面必须自包含：除本机地址外不得有外部 URL，也不得外链脚本/样式
   const external = [...res.body.matchAll(/https?:\/\/[^"'\s)]+/g)].map(match => match[0]).filter(url => !url.startsWith('http://127.0.0.1'))
   assert.deepEqual(external, [], '不得引用外部资源')
@@ -334,8 +334,23 @@ test('对话模式：state 透传 + POST /api/mode 切换与校验', async () =>
   assert.equal(badKey.code, 400)
 })
 
-test('配置写入：身份与权限字段（pairingPolicy / controlPolicy）可保存', async () => {
+
+test('偏好 API：暂停/恢复/表情开关', async () => {
   const env = await setup()
+  const chatKey = 'qqbot:1905346673:group:90001'
+  const pause = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/preferences', headers: PANEL, body: { action: 'pause', chatKey, minutes: 60 } })
+  assert.equal(pause.code, 200, pause.body)
+  assert.ok(env.store.chatPreference(chatKey).proactiveUntil > Date.now())
+  const off = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/preferences', headers: PANEL, body: { action: 'stickers', chatKey, enabled: false } })
+  assert.equal(off.code, 200)
+  assert.equal(env.store.chatPreference(chatKey).stickers, false)
+  const resume = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/preferences', headers: PANEL, body: { action: 'resume', chatKey } })
+  assert.equal(resume.code, 200)
+  assert.equal(env.store.chatPreference(chatKey).proactiveUntil, 0)
+})
+
+test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {
+ const env = await setup()
   env.configEditor.current = { transport: 'qqbot' }
   const res = await call(env.webUi, {
     method: 'POST',
@@ -387,7 +402,7 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
   assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
   assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'modes', 'pagePath', 'paths', 'personaBindings', 'personaFavorites', 'personaModeBindings', 'personaRecent', 'personas', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'stickers', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'modes', 'pagePath', 'participation', 'paths', 'personaBindings', 'personaFavorites', 'personaModeBindings', 'personaRecent', 'personas', 'preferences', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'stickers', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {

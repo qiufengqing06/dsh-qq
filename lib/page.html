@@ -421,6 +421,7 @@
       <a class="nav-item" href="#sec-groups" data-sec="sec-groups" title="群记忆"><span class="ico" data-icon="book"></span><span class="nav-label">群记忆</span><span class="nav-badge" id="badge-groups">–</span></a>
       <a class="nav-item" href="#sec-prompts" data-sec="sec-prompts" title="会话提示词"><span class="ico" data-icon="message"></span><span class="nav-label">会话提示词</span><span class="nav-badge" id="badge-prompts">–</span></a>
       <a class="nav-item" href="#sec-stickers" data-sec="sec-stickers" title="表情包"><span class="ico" data-icon="image"></span><span class="nav-label">表情包</span><span class="nav-badge" id="badge-stickers">–</span></a>
+      <a class="nav-item" href="#sec-chat-control" data-sec="sec-chat-control" title="聊天控制"><span class="ico" data-icon="sliders"></span><span class="nav-label">聊天控制</span></a>
       <a class="nav-item" href="#sec-config" data-sec="sec-config" title="配置"><span class="ico" data-icon="sliders"></span><span class="nav-label">配置</span></a>
       <a class="nav-item" href="#sec-trend" data-sec="sec-trend" title="活动量"><span class="ico" data-icon="activity"></span><span class="nav-label">活动量</span></a>
       <a class="nav-item" href="#sec-usage" data-sec="sec-usage" title="Token 消耗"><span class="ico" data-icon="coins"></span><span class="nav-label">Token 消耗</span></a>
@@ -493,6 +494,11 @@
     <section class="card" id="sec-stickers">
       <div class="card-head"><span class="ico" data-icon="image"></span><h2>表情包</h2><span class="right" id="stickers-note"></span></div>
       <div id="stickers"></div>
+    </section>
+
+    <section class="card" id="sec-chat-control">
+      <div class="card-head"><span class="ico" data-icon="sliders"></span><h2>聊天控制</h2><span class="right" id="chat-control-note"></span></div>
+      <div id="chat-control"></div>
     </section>
 
     <section class="card" id="sec-config">
@@ -1547,6 +1553,67 @@
   }
 
   /* ---------- config ---------- */
+  function preferenceAction(payload, message) {
+    api('/dsh-qq/api/preferences', payload).then(function (res) {
+      if (!res.data || res.data.ok !== true) { notice((res.data && res.data.error) || '偏好操作失败', 'bad'); return }
+      if (message) notice(message, 'info');
+      load();
+    }).catch(function (error) { notice(String(error.message || error), 'bad'); });
+  }
+
+  function skippedLabel(value) {
+    return ({ disabled: '未启用', off: '关闭', 'not-group': '非群聊', mentioned: '@', 'not-chat': '非聊天模式', quiet: '安静时段', cooldown: '冷却', 'daily-limit': '日上限', 'chat-paused': '本群暂停', 'member-paused': '成员暂停', log: 'log 记录', 'low-score': '低分' })[value] || value || '—';
+  }
+
+  function renderChatControl() {
+    var host = document.getElementById('chat-control');
+    if (!host) return;
+    host.textContent = '';
+    var p = S.participation;
+    var note = document.getElementById('chat-control-note');
+    if (note) note.textContent = p ? (p.enabled ? '参与判断：' + p.mode : '参与判断：未启用') : '';
+    if (p) {
+      host.appendChild(el('div', { className: 'usage-panel-title', text: '参与判断 · 最近判定' }));
+      host.appendChild(el('div', { className: 'hint', style: 'margin-bottom:6px', text: 'mode=' + p.mode + ' · 阈值=' + p.threshold + ' · 安静=' + p.quietHours + '（只记分数/原因，不存正文）' }));
+      var recent = Array.isArray(p.recent) ? p.recent.slice(-10).reverse() : [];
+      if (recent.length === 0) host.appendChild(el('div', { className: 'empty', text: '还没有判定记录。开启 log 后，群里的未 @ 消息会出现。' }));
+      else {
+        recent.forEach(function (row) {
+          host.appendChild(el('div', { className: 'group-row' }, [
+            el('div', { className: 'grow' }, [
+              el('div', { className: 'name', text: fmtTime(row.at) + ' · ' + promptLabel(row.chatKey).label }),
+              el('div', { className: 'sub', text: 'score ' + Number(row.score).toFixed(2) + ' · ' + (row.wake ? '唤醒' : skippedLabel(row.skipped)) + (row.reasons.length ? ' · ' + row.reasons.join(' / ') : '') })
+            ])
+          ]));
+        });
+      }
+    } else {
+      host.appendChild(el('div', { className: 'empty', text: '参与判断未装配。' }));
+    }
+
+    var keys = Array.isArray(S.chatKeys) ? S.chatKeys.slice() : [];
+    var prefs = S.preferences || {};
+    var chats = prefs.chats || {};
+    Object.keys(chats).forEach(function (key) { if (keys.indexOf(key) < 0) keys.push(key); });
+    host.appendChild(el('div', { className: 'usage-panel-title', text: '对话偏好 / 静默', style: 'margin-top:16px' }));
+    if (keys.length === 0) host.appendChild(el('div', { className: 'empty', text: '还没有已知对话。' }));
+    keys.forEach(function (key) {
+      var pref = chats[key] || { proactiveUntil: 0, stickers: true };
+      var paused = Number(pref.proactiveUntil) > Date.now();
+      host.appendChild(el('div', { className: 'group-row', style: 'flex-wrap:wrap;gap:8px' }, [
+        el('div', { className: 'grow' }, [
+          el('div', { className: 'name', text: promptLabel(key).label }),
+          el('div', { className: 'sub mono', text: key })
+        ]),
+        pill(paused ? '主动暂停到 ' + fmtTime(pref.proactiveUntil) : '主动开启', paused ? 'warn' : 'ok', false),
+        pill(pref.stickers === false ? '表情关闭' : '表情开启', pref.stickers === false ? 'warn' : 'ok', false),
+        btn('暂停1h', 'quiet sm', function () { preferenceAction({ action: 'pause', chatKey: key, minutes: 60 }, '已暂停 1 小时'); }),
+        btn('恢复', 'quiet sm', function () { preferenceAction({ action: 'resume', chatKey: key }, '已恢复主动'); }),
+        btn(pref.stickers === false ? '开启表情' : '关闭表情', 'quiet sm', function () { preferenceAction({ action: 'stickers', chatKey: key, enabled: pref.stickers === false }, '表情设置已更新'); })
+      ]));
+    });
+  }
+
   var stickerFilter = 'all';
 
   function stickerAction(payload, message) {
@@ -1999,6 +2066,7 @@
     renderGroups();
     renderPrompts();
     renderStickers();
+    renderChatControl();
     renderConfig();
     renderActivity();
     renderReadonly();

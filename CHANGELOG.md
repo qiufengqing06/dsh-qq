@@ -3,6 +3,12 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.28
+
+- Phase 0：聊天模式发送代际。`/qq-stop`、切模式、 `/qq-new`/`/qq-switch` 会让旧代际的
+  未发气泡失效；每次等待结束/交给 transport 前复查。
+- 补停止/切模式回归测试。
+
 ## v0.7.27
 
 - 修复控制台「读取状态失败：modeSupported is not defined」：变量只声明在 renderPersonaBlock，

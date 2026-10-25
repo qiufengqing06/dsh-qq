@@ -1283,6 +1283,44 @@ test('聊天模式：回复拆成多条，工作模式仍整段发送', async ()
   assert.equal(second.transport.dump().filter(entry => entry.kind === 'text').length, 1, '工作模式保持整段一条')
 })
 
+test('停止/切模式：已排队的聊天气泡不再发送（回复代际）', async () => {
+  const pending = []
+  const { bridge, transport, agents, store } = await setup({}, {}, {}, {
+    sleep: () => new Promise(resolve => { pending.push(resolve) }),
+    random: () => 0,
+  })
+  const ev = transport.injectText('聊聊')
+  await bridge.handleUserMessage(ev)
+  await store.setMode(ev.chatKey, 'chat')
+  const agent = agents.live.get(agents.created[0].sessionId)
+  const long = '第一句话要稍微长一点，保证整体长度超过八十个字符，这样才会触发拆分逻辑。第二句话也要稍微长一点，保证拆分之后每条都有实际内容。第三句话同样长一点，用来验证最多三条的上限。'
+  agent.reply(long)
+  agent.ctx.emitStatus('idle')
+  await tick(5)
+  assert.ok(pending.length > 0, '应停在第一条消息前的等待')
+  await bridge.stop(ev.chatKey)
+  for (const resolve of pending.splice(0)) resolve()
+  await tick(30)
+  assert.equal(transport.dump().filter(item => item.kind === 'text').length, 0, 'stop 后旧代际不得再发送')
+
+  const second = await setup({}, {}, {}, {
+    sleep: () => new Promise(resolve => { pending.push(resolve) }),
+    random: () => 0,
+  })
+  const ev2 = second.transport.injectText('聊聊')
+  await second.bridge.handleUserMessage(ev2)
+  await second.store.setMode(ev2.chatKey, 'chat')
+  const agent2 = second.agents.live.get(second.agents.created[0].sessionId)
+  agent2.reply(long)
+  agent2.ctx.emitStatus('idle')
+  await tick(5)
+  assert.ok(pending.length > 0, '应停在第一条消息前的等待')
+  await second.store.setMode(ev2.chatKey, 'work')
+  for (const resolve of pending.splice(0)) resolve()
+  await tick(30)
+  assert.equal(second.transport.dump().filter(item => item.kind === 'text').length, 0, '切到 work 后旧代际不得再发送')
+})
+
 test('会话提示词：setup 注册动态 section，保存后下一回合立即生效', async () => {
   const { bridge, transport, agents, store } = await setup({}, {}, { capabilities: { markdown: true } })
   await bridge.handleUserMessage(transport.injectText('ping'))

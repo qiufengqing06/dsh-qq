@@ -236,7 +236,7 @@ test('页面：自包含 HTML（无外部资源），含线路/凭据/身份/配
   const res = await call(env.webUi, { url: PAGE_PATH })
   assert.equal(res.code, 200)
   assert.match(res.headers['content-type'], /text\/html/)
-  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库', '对话模式']) {
+  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库', '对话模式', '模式切换暂不可用']) {
     assert.ok(res.body.includes(marker), `页面应包含 ${marker}`)
   }
   // 页面必须自包含：除本机地址外不得有外部 URL，也不得外链脚本/样式

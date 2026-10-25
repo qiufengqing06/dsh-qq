@@ -3,6 +3,10 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.33
+
+- schedule_task 的 list/remove 不再依赖 lastTarget；目标暂缺时仍可查看/删除任务，只有 add 要求可发送目标。
+
 ## v0.7.32
 
 - 定时提醒/主动任务：`store.schedules` + `lib/scheduler.js`（30s tick、安静时段、每日上限、忙时跳过、错过不补）。

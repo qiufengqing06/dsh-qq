@@ -3,6 +3,13 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.34
+
+- 表情包图库：chat 模式群图自动收藏（SHA-256 去重、候选/收藏/回收站、按群 noShare 例外、跨群共享）。
+- 新增 `list_stickers` / `send_sticker` 工具；`/qq-sticker list|keep|trash|restore|tag|send|delete` 管理命令。
+- 发送闸门：仅 chat、media=image、同对话冷却、每日上限、同图 TTL；没有合适候选就不发。
+- 图库文件在 dataDir/stickers，不上传外部；自动收藏只处理群聊图片。
+
 ## v0.7.33
 
 - schedule_task 的 list/remove 不再依赖 lastTarget；目标暂缺时仍可查看/删除任务，只有 add 要求可发送目标。

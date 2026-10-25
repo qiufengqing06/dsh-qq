@@ -1397,7 +1397,8 @@ test('聊天模式工具边界：read/bash 被 guard 拒绝，web_fetch/表情�
   }
   await agents.created[0].setup(agentCtx, {})
   assert.equal(guards.length, 1)
-  assert.match(guards[0]({ name: 'read' }), /聊天模式内部限制/)
+  assert.equal(guards[0]({ name: 'read' }), undefined, '聊天模式允许读用户发来的文件')
+  assert.match(guards[0]({ name: 'write' }), /聊天模式内部限制/)
   assert.match(guards[0]({ name: 'bash' }), /聊天模式内部限制/)
   assert.equal(guards[0]({ name: 'web_fetch' }), undefined)
   assert.equal(guards[0]({ name: 'send_sticker' }), undefined)

@@ -1283,6 +1283,35 @@ test('聊天模式：回复拆成多条，工作模式仍整段发送', async ()
   assert.equal(second.transport.dump().filter(entry => entry.kind === 'text').length, 1, '工作模式保持整段一条')
 })
 
+test('模式隔离：work/chat 各自独立会话，切回恢复原会话', async () => {
+  const { bridge, transport, agents, store } = await setup()
+  const ev = transport.injectText('工作模式')
+  await bridge.handleUserMessage(ev)
+  const workAgent = agents.live.get(agents.created[0].sessionId)
+  const workId = store.modeSession(ev.chatKey, 'work')
+  assert.match(workId, /^qq-/)
+  workAgent.ctx.emitStatus('idle')
+  await tick()
+
+  await store.setMode(ev.chatKey, 'chat')
+  await bridge.activateMode(ev.chatKey, 'chat')
+  await bridge.handleUserMessage(transport.injectText('聊天模式'))
+  const chatId = store.modeSession(ev.chatKey, 'chat')
+  assert.match(chatId, /^qq-/)
+  assert.notEqual(chatId, workId, 'chat 不能复用 work 会话')
+  const chatAgent = agents.live.get(chatId)
+  chatAgent.ctx.emitStatus('idle')
+  await tick()
+
+  await store.setMode(ev.chatKey, 'work')
+  await bridge.activateMode(ev.chatKey, 'work')
+  await bridge.handleUserMessage(transport.injectText('切回工作'))
+  assert.equal(store.modeSession(ev.chatKey, 'work'), workId, '切回 work 应恢复原会话')
+  assert.equal(agents.created.length, 2, '不应重复创建 work/chat 会话')
+  assert.equal(workAgent.followed.length, 2, 'work 会话历史保留')
+  assert.equal(chatAgent.followed.length, 1, 'chat 会话历史独立')
+})
+
 test('停止/切模式：已排队的聊天气泡不再发送（回复代际）', async () => {
   const pending = []
   const { bridge, transport, agents, store } = await setup({}, {}, {}, {

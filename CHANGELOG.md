@@ -3,6 +3,13 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.29
+
+- work/chat 会话隔离：每个模式各自绑定一个 DSH session；切模式时恢复对应会话，没有则下一条消息新建。
+- `/qq-mode` 与页面模式下拉都走 `control.setMode` → `bridge.activateMode`，不再只改提示词。
+- 旧数据迁移：已有 currentSessionId 归入当前模式，其余旧会话归 work；不会丢历史。
+- `/qq-sessions`/`/qq-switch` 只列/切当前模式的会话。
+
 ## v0.7.28
 
 - Phase 0：聊天模式发送代际。`/qq-stop`、切模式、 `/qq-new`/`/qq-switch` 会让旧代际的

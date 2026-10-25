@@ -465,3 +465,25 @@ test('对话模式：默认 work，切换 chat 后跨重启保留', async () => 
   assert.equal(second.modeFor('qqbot:1:dm:u'), 'chat')
   assert.equal(second.modeFor('qqbot:1:dm:other'), 'work')
 })
+
+test('模式会话：work/chat 各自指针，过滤会话列表并跨重启保留', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-mode-session-'))
+  const first = createStore({ dir })
+  await first.load()
+  const chatKey = 'qqbot:1:dm:u'
+  await first.setCurrentSession(chatKey, 's-work', { mode: 'work' })
+  await first.setMode(chatKey, 'chat')
+  await first.setCurrentSession(chatKey, 's-chat', { mode: 'chat' })
+  assert.equal(first.modeSession(chatKey, 'work'), 's-work')
+  assert.equal(first.modeSession(chatKey, 'chat'), 's-chat')
+  assert.equal(first.sessionMode(chatKey, 's-work'), 'work')
+  assert.deepEqual(first.sessions(chatKey, 'work').map(item => item.sessionId), ['s-work'])
+  assert.deepEqual(first.sessions(chatKey, 'chat').map(item => item.sessionId), ['s-chat'])
+
+  const second = createStore({ dir })
+  await second.load()
+  assert.equal(second.modeFor(chatKey), 'chat')
+  assert.equal(second.modeSession(chatKey, 'work'), 's-work')
+  assert.equal(second.modeSession(chatKey, 'chat'), 's-chat')
+  assert.equal(second.chat(chatKey).currentSessionId, 's-chat')
+})

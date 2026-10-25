@@ -3,6 +3,13 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.37
+
+- 参与判断（Phase 2）：未 @ 群聊按确定性规则评分；默认 enabled=false，mode=log 只记录，block 才唤醒。
+- 配置：participation.enabled/mode/threshold/quietHours/cooldownMs/dailyWakeLimit；控制台「配置 → 群聊」可改。
+- 只在 chat 模式 + 群聊生效；命令/审批优先；官方线只能 @，个人线才能旁观插话。
+- 阈值/安静/冷却/日上限；低分仍进群缓冲。
+
 ## v0.7.36
 
 - 控制台「表情包」页面：网格预览、候选/收藏/回收站筛选、标签编辑、收藏/回收/恢复/删除。

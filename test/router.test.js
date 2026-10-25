@@ -14,7 +14,7 @@ import { createControl } from '../lib/control.js'
 import { createRouter, parseCommand, stripMention } from '../lib/router.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
-async function setup(configOverrides = {}, { dshCommand = null } = {}) {
+async function setup(configOverrides = {}, { dshCommand = null, participation = null } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-router-'))
   const config = resolveConfig({ transport: 'mock', autoConnect: false, dataDir: dir, ...configOverrides })
   const store = createStore({ dir, logger: createLogger() })
@@ -27,7 +27,7 @@ async function setup(configOverrides = {}, { dshCommand = null } = {}) {
   const approval = createApprovalRegistry({})
   const bridge = createBridge({ ctx, config, store, transport, scope, logger })
   const control = createControl({ ctx, config, store, bridge, transport, approval, scope, logger })
-  const router = createRouter({ config, store, control, bridge, logger, dshCommand })
+  const router = createRouter({ config, store, control, bridge, participation, logger, dshCommand })
   await store.setHomeChannel('owner-1')
   return { dir, config, store, transport, agents, ctx, scope, bridge, control, router }
 }
@@ -46,6 +46,38 @@ test('parseCommand / stripMention', () => {
   assert.equal(parseCommand('   '), null)
   assert.equal(stripMention('<@!123> /qq-help'), '/qq-help')
   assert.equal(stripMention('@bot 你好'), '你好')
+})
+
+test('参与判断：wake=true 才进 bridge，命令仍不参与', async () => {
+  const calls = []
+  const participation = { evaluate: async ev => { calls.push(ev.text); return { wake: ev.text.includes('报错') } } }
+  const { router, transport, store } = await setup({}, { participation })
+  await store.setMode('mock:acct:group:g1', 'chat')
+  const hit = transport.inject({
+    target: { kind: 'group', groupId: 'g1' },
+    sender: { id: 'owner-1', name: 'O' },
+    text: '这个报错怎么修',
+    mentioned: false,
+  })
+  const result = await router.routeInbound(hit)
+  assert.equal(result.handled, 'message')
+  assert.deepEqual(calls, ['这个报错怎么修'])
+
+  const miss = transport.inject({
+    target: { kind: 'group', groupId: 'g1' },
+    sender: { id: 'owner-1', name: 'O' },
+    text: '在吗',
+    mentioned: false,
+  })
+  assert.deepEqual(await router.routeInbound(miss), { handled: 'ignored', reason: 'not-mentioned' })
+
+  const command = transport.inject({
+    target: { kind: 'group', groupId: 'g1' },
+    sender: { id: 'owner-1', name: 'O' },
+    text: '/qq-status',
+    mentioned: false,
+  })
+  assert.deepEqual(await router.routeInbound(command), { handled: 'ignored', reason: 'not-mentioned' })
 })
 
 test('群消息未 @机器人 → 静默忽略', async () => {

@@ -1286,6 +1286,29 @@ test('聊天模式：回复拆成多条，工作模式仍整段发送', async ()
   assert.equal(second.transport.dump().filter(entry => entry.kind === 'text').length, 1, '工作模式保持整段一条')
 })
 
+test('切人设：旧人设下尚未发出的气泡失效', async () => {
+  const pending = []
+  const { bridge, transport, agents, store } = await setup({}, {}, {}, {
+    sleep: () => new Promise(resolve => { pending.push(resolve) }),
+    random: () => 0,
+  })
+  await store.setPersona('a', { name: 'A', text: '你是 A' })
+  await store.setPersona('b', { name: 'B', text: '你是 B' })
+  const ev = transport.injectText('聊聊')
+  await bridge.handleUserMessage(ev)
+  await store.setMode(ev.chatKey, 'chat')
+  await store.bindPersona(ev.chatKey, 'a', 'chat')
+  const agent = agents.live.get(agents.created[0].sessionId)
+  agent.reply('第一句话要稍微长一点，保证整体长度超过八十个字符，这样才会触发拆分逻辑。第二句话也要稍微长一点，保证拆分之后每条都有实际内容。第三句话同样长一点，用来验证最多三条的上限。')
+  agent.ctx.emitStatus('idle')
+  await tick(5)
+  assert.ok(pending.length > 0, '应停在第一条消息前')
+  await store.bindPersona(ev.chatKey, 'b', 'chat')
+  for (const resolve of pending.splice(0)) resolve()
+  await tick(30)
+  assert.equal(transport.dump().filter(item => item.kind === 'text').length, 0, '切人设后旧气泡不得发送')
+})
+
 test('模式隔离：work/chat 各自独立会话，切回恢复原会话', async () => {
   const { bridge, transport, agents, store } = await setup()
   const ev = transport.injectText('工作模式')

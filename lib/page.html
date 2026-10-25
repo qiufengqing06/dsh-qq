@@ -1565,6 +1565,14 @@
     return ({ disabled: '未启用', off: '关闭', 'not-group': '非群聊', mentioned: '@', 'not-chat': '非聊天模式', quiet: '安静时段', cooldown: '冷却', 'daily-limit': '日上限', 'chat-paused': '本群暂停', 'member-paused': '成员暂停', log: 'log 记录', 'low-score': '低分' })[value] || value || '—';
   }
 
+  function scheduleAction(id) {
+    api('/dsh-qq/api/schedules', { action: 'remove', id: id }).then(function (res) {
+      if (!res.data || res.data.ok !== true) { notice((res.data && res.data.error) || '删除任务失败', 'bad'); return }
+      notice('定时任务已删除', 'info');
+      load();
+    }).catch(function (error) { notice(String(error.message || error), 'bad'); });
+  }
+
   function renderChatControl() {
     var host = document.getElementById('chat-control');
     if (!host) return;
@@ -1610,6 +1618,20 @@
         btn('暂停1h', 'quiet sm', function () { preferenceAction({ action: 'pause', chatKey: key, minutes: 60 }, '已暂停 1 小时'); }),
         btn('恢复', 'quiet sm', function () { preferenceAction({ action: 'resume', chatKey: key }, '已恢复主动'); }),
         btn(pref.stickers === false ? '开启表情' : '关闭表情', 'quiet sm', function () { preferenceAction({ action: 'stickers', chatKey: key, enabled: pref.stickers === false }, '表情设置已更新'); })
+      ]));
+    });
+
+    var tasks = Array.isArray(S.schedules) ? S.schedules : [];
+    host.appendChild(el('div', { className: 'usage-panel-title', text: '定时任务', style: 'margin-top:16px' }));
+    if (tasks.length === 0) host.appendChild(el('div', { className: 'empty', text: '还没有定时任务。在 QQ 里说“30 秒后提醒我…”或让模型调 schedule_task。' }));
+    tasks.forEach(function (task) {
+      host.appendChild(el('div', { className: 'group-row', style: 'flex-wrap:wrap;gap:8px' }, [
+        el('div', { className: 'grow' }, [
+          el('div', { className: 'name', text: promptLabel(task.chatKey).label + ' · ' + (task.kind === 'daily' ? '每天 ' + task.time : fmtTime(task.at)) }),
+          el('div', { className: 'sub', text: (task.social ? '社交主动 · ' : '固定提醒 · ') + task.prompt + (task.lastError ? ' · 错误：' + task.lastError : '') })
+        ]),
+        pill(task.social ? '社交' : '提醒', task.social ? 'warn' : 'ok', false),
+        btn('删除', 'quiet sm', function () { if (window.confirm('删除这个定时任务？')) scheduleAction(task.id); })
       ]));
     });
   }

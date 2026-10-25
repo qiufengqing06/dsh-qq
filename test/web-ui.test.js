@@ -349,6 +349,22 @@ test('偏好 API：暂停/恢复/表情开关', async () => {
   assert.equal(env.store.chatPreference(chatKey).proactiveUntil, 0)
 })
 
+test('定时任务：state 列表 + 删除接口', async () => {
+  const env = await setup()
+  const chatKey = 'qqbot:1905346673:group:90001'
+  await env.store.scheduleAdd({
+    id: 's1', chatKey, transportKind: 'qqbot', accountId: '1905346673',
+    target: { kind: 'group', groupId: '90001' }, prompt: '喝水', kind: 'daily', time: '09:00',
+    at: null, enabled: true, social: false, createdAt: 1, lastRun: '', lastError: '',
+  })
+  const state = JSON.parse((await call(env.webUi, { url: '/dsh-qq/api/state' })).body).state
+  assert.equal(state.schedules.length, 1)
+  assert.equal(state.schedules[0].prompt, '喝水')
+  const remove = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/schedules', headers: PANEL, body: { action: 'remove', id: 's1' } })
+  assert.equal(remove.code, 200, remove.body)
+  assert.equal(env.store.schedules().length, 0)
+})
+
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {
  const env = await setup()
   env.configEditor.current = { transport: 'qqbot' }
@@ -402,7 +418,7 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
   assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
   assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'modes', 'pagePath', 'participation', 'paths', 'personaBindings', 'personaFavorites', 'personaModeBindings', 'personaRecent', 'personas', 'preferences', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'stickers', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'modes', 'pagePath', 'participation', 'paths', 'personaBindings', 'personaFavorites', 'personaModeBindings', 'personaRecent', 'personas', 'preferences', 'prompt', 'promptLimit', 'routes', 'schedules', 'stats', 'status', 'stickers', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {

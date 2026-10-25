@@ -9,7 +9,7 @@ import { createStore } from '../lib/store.js'
 import { createMockTransport } from '../lib/mock.js'
 import { createGroupMemory } from '../lib/group-memory.js'
 import { createResourceScope } from '../lib/scope.js'
-import { createBridge, dshUiFencesToText, extractAssistantText, extractTurnError, lastEventSeq, splitChatReply, stripDshUiFences, toPlainText } from '../lib/bridge.js'
+import { clipChatReply, createBridge, dshUiFencesToText, extractAssistantText, extractTurnError, lastEventSeq, splitChatReply, stripDshUiFences, toPlainText } from '../lib/bridge.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
 const tick = (ms = 15) => new Promise(resolve => setTimeout(resolve, ms))
@@ -1257,6 +1257,10 @@ test('token 用量：assistant/message 的 usage 按对话记账（一轮多步�
 test('splitChatReply：短文本/代码块不拆，长回复拆成有限条', () => {
   assert.deepEqual(splitChatReply(''), [])
   assert.deepEqual(splitChatReply('短回复'), ['短回复'])
+  assert.equal(clipChatReply('短回复'), '短回复')
+  const clipped = clipChatReply('第一句很长很长。'.repeat(50), 30)
+  assert.ok(clipped.length <= 31)
+  assert.match(clipped, /…$/)
   const fence = String.fromCharCode(96).repeat(3)
   assert.deepEqual(splitChatReply(fence + 'js\nconsole.log(1)\n' + fence + '\n后面还有一句'), [fence + 'js\nconsole.log(1)\n' + fence + '\n后面还有一句'])
   // 多段短回复也要拆：真机反馈两段各一句被挤成一条

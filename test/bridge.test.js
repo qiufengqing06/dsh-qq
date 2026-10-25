@@ -1249,7 +1249,10 @@ test('splitChatReply：短文本/代码块不拆，长回复拆成有限条', ()
   assert.deepEqual(splitChatReply('短回复'), ['短回复'])
   const fence = String.fromCharCode(96).repeat(3)
   assert.deepEqual(splitChatReply(fence + 'js\nconsole.log(1)\n' + fence + '\n后面还有一句'), [fence + 'js\nconsole.log(1)\n' + fence + '\n后面还有一句'])
-  const long = '第一句话要稍微长一点，保证超过八十个字符的整体长度。第二句话也要稍微长一点，保证拆分后有内容。第三句话同样长一点，用来验证最多三条的上限。第四句话会被合并进最后一条。'
+  // 多段短回复也要拆：真机反馈两段各一句被挤成一条
+  const shortTwo = '琪亚娜呀，当然知道呢~\n\n那个一头白发的姑娘，是芽衣心里最重要的人。虽然我和她不在同一个时代，但她后来走过的路，我都听说过哦♪'
+  assert.equal(splitChatReply(shortTwo).length, 2, '两段短回复应拆成两条')
+    const long = '第一句话要稍微长一点，保证超过八十个字符的整体长度。第二句话也要稍微长一点，保证拆分后有内容。第三句话同样长一点，用来验证最多三条的上限。第四句话会被合并进最后一条。'
   const bubbles = splitChatReply(long, 3)
   assert.ok(bubbles.length >= 2 && bubbles.length <= 3, '应拆成 2–3 条')
   assert.match(bubbles.at(-1), /第四句话/)

@@ -99,6 +99,19 @@ test('动态上下文：格式为「时间 [昵称|QQ号] 内容」，昵称走 
   assert.match(pending.text, /^\d{2}:\d{2} \[秋 月明骗子\|44444\] 我是秦始皇$/, '昵称清洗 + QQ 号身份锚点')
 })
 
+test('群笔记按模式分开：work/chat 各写各的文件', async () => {
+  const { memory, dir } = await setup()
+  assert.equal((await memory.editNotes(GROUP, { action: 'add', text: '工作群笔记' }, 'work')).ok, true)
+  assert.equal((await memory.editNotes(GROUP, { action: 'add', text: '聊天群笔记' }, 'chat')).ok, true)
+  assert.match(await memory.notesOf(GROUP, 'work'), /工作群笔记/)
+  assert.doesNotMatch(await memory.notesOf(GROUP, 'work'), /聊天群笔记/)
+  assert.match(await memory.notesOf(GROUP, 'chat'), /聊天群笔记/)
+  assert.doesNotMatch(await memory.notesOf(GROUP, 'chat'), /工作群笔记/)
+  const base = GROUP.replace(/[^A-Za-z0-9_.-]+/g, '_')
+  assert.ok(await readFile(join(dir, 'groups', `${base}.md`), 'utf8'))
+  assert.ok(await readFile(join(dir, 'groups', `${base}.chat.md`), 'utf8'))
+})
+
 test('群笔记：add/replace/remove、去重、按群隔离，并落盘可跨实例读取', async () => {
   const { memory, dir, config, logger } = await setup()
   const added = await memory.editNotes(GROUP, { action: 'add', text: '群里管群主叫「堂主」' })

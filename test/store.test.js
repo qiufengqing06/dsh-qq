@@ -556,3 +556,22 @@ test('定时任务：增删查、跨重启保留、非法条目加载时丢弃',
   assert.equal(await second.scheduleRemove('s1'), true)
   assert.equal(second.schedules().length, 0)
 })
+
+test('明确偏好/静默：对话暂停、表情开关、成员称呼/主动暂停', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-prefs-'))
+  const s = createStore({ dir })
+  await s.load()
+  const chatKey = 'qqbot:1:group:2'
+  assert.deepEqual(s.chatPreference(chatKey), { proactiveUntil: 0, stickers: true })
+  await s.setChatPreference(chatKey, { proactiveUntil: 123456, stickers: false })
+  assert.equal(s.chatPreference(chatKey).proactiveUntil, 123456)
+  assert.equal(s.chatPreference(chatKey).stickers, false)
+  await s.setMemberPreference(chatKey, 'u1', { name: '小林', proactiveUntil: 999 })
+  assert.deepEqual(s.memberPreference(chatKey, 'u1'), { name: '小林', proactiveUntil: 999 })
+  await s.setMemberPreference(chatKey, 'u1', { name: '', proactiveUntil: 0 })
+  assert.deepEqual(s.memberPreference(chatKey, 'u1'), { name: '', proactiveUntil: 0 })
+
+  const reopened = createStore({ dir })
+  await reopened.load()
+  assert.equal(reopened.chatPreference(chatKey).stickers, false)
+})

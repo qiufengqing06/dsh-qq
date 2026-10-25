@@ -10,7 +10,11 @@ function at(hhmm) {
 
 function env({ mode = 'chat', participation = {}, now = at('12:00') } = {}) {
   const state = { now }
-  const store = { modeFor: () => mode }
+  const store = {
+    modeFor: () => mode,
+    chatPreference: () => ({ proactiveUntil: 0, stickers: true }),
+    memberPreference: () => ({ name: '', proactiveUntil: 0 }),
+  }
   const p = createParticipation({
     config: { participation: { enabled: true, mode: 'block', threshold: 0.55, quietHours: '23:00-08:00', cooldownMs: 120000, dailyWakeLimit: 3, ...participation } },
     store,
@@ -63,4 +67,33 @@ test('log：只记录，永不唤醒', () => {
   const env1 = env({ participation: { mode: 'log' } })
   assert.equal(env1.p.shouldWake(ev('这个报错怎么修呀')), false)
   assert.equal(env1.p.evaluate(ev('这个报错怎么修呀')).skipped, 'log')
+})
+
+test('明确静默：对话暂停/成员暂停时不唤醒', () => {
+  const env1 = env()
+  const now = env1.state.now
+  env1.p.store = undefined
+  const paused = {
+    modeFor: () => 'chat',
+    chatPreference: () => ({ proactiveUntil: now + 60000, stickers: true }),
+    memberPreference: () => ({ name: '', proactiveUntil: 0 }),
+  }
+  const p1 = createParticipation({
+    config: { participation: { enabled: true, mode: 'block', threshold: 0.55, quietHours: '23:00-08:00' } },
+    store: paused,
+    clock: () => now,
+  })
+  assert.equal(p1.shouldWake(ev('这个报错怎么修呀')), false)
+
+  const memberPaused = {
+    modeFor: () => 'chat',
+    chatPreference: () => ({ proactiveUntil: 0, stickers: true }),
+    memberPreference: () => ({ name: '', proactiveUntil: now + 60000 }),
+  }
+  const p2 = createParticipation({
+    config: { participation: { enabled: true, mode: 'block', threshold: 0.55, quietHours: '23:00-08:00' } },
+    store: memberPaused,
+    clock: () => now,
+  })
+  assert.equal(p2.shouldWake(ev('这个报错怎么修呀')), false)
 })

@@ -55,6 +55,16 @@ test('后续消息复用同一会话，不重复创建（回合结束后的新�
   assert.equal(agent.steered.length, 0)
 })
 
+test('明确称呼偏好：只在当前消息前加一行', async () => {
+  const { bridge, transport, agents, store } = await setup()
+  const ev = transport.injectText('你好')
+  await store.setMemberPreference(ev.chatKey, ev.sender.id, { name: '小林' })
+  await bridge.handleUserMessage(ev)
+  const agent = agents.live.get(agents.created[0].sessionId)
+  assert.match(agent.followed[0].content[0].text, /称呼偏好.*小林/)
+  assert.equal(agent.followed[0].content.at(-1).text, '你好')
+})
+
 test('引用消息进入模型可见内容', async () => {
   const { bridge, transport, agents } = await setup()
   const ev = transport.inject({

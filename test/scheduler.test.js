@@ -26,6 +26,7 @@ function fakeEnv({ tasks = [], mode = 'chat', busy = false, now = at('08:00') } 
         return true
       },
       modeFor: () => mode,
+      chatPreference: () => ({ proactiveUntil: 0, stickers: true }),
     },
     bridge: {
       isBusy: () => busy,
@@ -119,4 +120,22 @@ test('scheduler：安静时段/work 社交/忙时都不发', async () => {
   await busyStop.tick()
   assert.equal(busyEnv.sent.length, 0, '忙时跳过')
   busyStop()
+})
+
+test('scheduler：对话主动暂停时不发社交消息', async () => {
+  const task = {
+    id: 't3', chatKey: 'qqbot:1:group:2', transportKind: 'qqbot', accountId: '1',
+    target: { kind: 'group', groupId: '2' }, prompt: '早安', kind: 'daily', time: '09:00',
+    at: null, enabled: true, social: true, lastRun: '', lastError: '',
+  }
+  const env = fakeEnv({ tasks: [task], now: at('09:00') })
+  env.store.chatPreference = () => ({ proactiveUntil: at('10:00'), stickers: true })
+  const stop = startScheduler({
+    store: env.store, bridge: env.bridge,
+    config: { schedules: { enabled: true, tickMs: 1000, quietHours: '23:00-08:00' } },
+    clock: () => env.state.now,
+  })
+  await stop.tick()
+  assert.equal(env.sent.length, 0)
+  stop()
 })

@@ -77,6 +77,20 @@ test('/qq-mode：work/chat 切换、查看与权限', async () => {
   assert.match((await run(control, '/qq-mode chat', 'authorized')).reply, /无权限执行/)
 })
 
+test('/qq-pref：称呼、暂停、表情开关与恢复', async () => {
+  const { control, store } = await setup()
+  const chatKey = 'mock:acct:dm:u1'
+  assert.match((await run(control, '/qq-pref show')).reply, /本对话主动：开启/)
+  assert.match((await run(control, '/qq-pref name 小林')).reply, /称呼你为「小林」/)
+  assert.equal(store.memberPreference(chatKey, 'u1').name, '小林')
+  assert.match((await run(control, '/qq-pref pause 10')).reply, /已暂停/)
+  assert.ok(store.chatPreference(chatKey).proactiveUntil > Date.now())
+  assert.match((await run(control, '/qq-pref stickers off')).reply, /已关闭/)
+  assert.equal(store.chatPreference(chatKey).stickers, false)
+  assert.match((await run(control, '/qq-pref resume')).reply, /已恢复/)
+  assert.equal(store.chatPreference(chatKey).proactiveUntil, 0)
+})
+
 test('/qq-schedule：list/remove 只操作本对话', async () => {
   const { control, store } = await setup()
   const chatKey = 'mock:acct:dm:u1'

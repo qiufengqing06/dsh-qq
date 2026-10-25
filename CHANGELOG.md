@@ -3,6 +3,12 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.38
+
+- 明确偏好/静默：store.preferences（对话 proactiveUntil/stickers、成员 name/proactiveUntil）。
+- `/qq-pref show|name|pause|resume|stickers|member-pause|member-resume`；暂停只影响主动/参与判断，@ 和固定提醒不受影响。
+- 参与判断、定时社交主动、表情包发送都检查偏好；成员称呼作为一行上下文注入，不写长期记忆。
+
 ## v0.7.37
 
 - 参与判断（Phase 2）：未 @ 群聊按确定性规则评分；默认 enabled=false，mode=log 只记录，block 才唤醒。

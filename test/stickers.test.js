@@ -111,3 +111,21 @@ test('工具：list_stickers/send_sticker 在当前对话工作', async () => {
   assert.equal(sent.ok, true)
   assert.equal(env.sent.length, 1)
 })
+
+test('明确静默：本群关闭表情时工具拒绝发送', async () => {
+  const env = await setup()
+  await env.store.capture(env.ev, { download: env.download, mode: 'chat' })
+  const id = env.store.list(env.ev.chatKey)[0].id
+  const tools = createStickerTools({
+    store: env.store,
+    transport: env.transport,
+    chatKeyOf: () => env.ev.chatKey,
+    modeOf: () => 'chat',
+    chatPreference: () => ({ stickers: false }),
+  })
+  const sendTool = tools.find(tool => tool.name === 'send_sticker')
+  const result = await sendTool.execute({ id }, { agent: { session: { id: 's1' } } })
+  assert.equal(result.ok, false)
+  assert.match(result.message, /关闭表情包/)
+  assert.equal(env.sent.length, 0)
+})

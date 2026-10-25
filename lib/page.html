@@ -1360,6 +1360,8 @@
     var prompt = S.prompt || {};
     var overrides = prompt.chats || {};
     var bindings = S.personaBindings || {};
+    // 旧后端没有 state.modes：禁用模式下拉，避免“切换成功”的假象
+    var modeSupported = S.modes !== undefined && S.modes !== null;
     var defaultText = prompt.default || '';
     var defaultPersona = personaById(S.defaultPersonaId || '');
     var badge = document.getElementById('badge-prompts');

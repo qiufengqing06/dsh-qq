@@ -50,3 +50,8 @@ test('测试消息结果使用已定义的颜色变量；provider 清空时一�
   assert.doesNotMatch(html, /var\(--ok\)|var\(--bad\)/, '主题里只有 --positive/--negative')
   assert.match(html, /nextProvider === null[\s\S]{0,120}setDirty\('agentOptions\.model', ''\)/)
 })
+
+test('模式下拉的 modeSupported 必须在 renderPrompts 作用域内声明', () => {
+  // 历史 bug：变量只写在 renderPersonaBlock 里，renderPrompts 的行渲染引用时 ReferenceError
+  assert.match(html, /function renderPrompts\(\) \{[\s\S]{0,600}var modeSupported = S\.modes/)
+})

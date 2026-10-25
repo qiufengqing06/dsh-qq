@@ -3,6 +3,11 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.27
+
+- 修复控制台「读取状态失败：modeSupported is not defined」：变量只声明在 renderPersonaBlock，
+  renderPrompts 的行渲染引用时抛 ReferenceError；作用域已修正，并补页面结构回归。
+
 ## v0.7.26
 
 - 修复「切到聊天、过一会又变回工作」的假象：页面已更新但宿主进程还是旧代码时，

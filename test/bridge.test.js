@@ -1397,8 +1397,8 @@ test('聊天模式工具边界：read/bash 被 guard 拒绝，web_fetch/表情�
   }
   await agents.created[0].setup(agentCtx, {})
   assert.equal(guards.length, 1)
-  assert.match(guards[0]({ name: 'read' }), /聊天模式不执行工具/)
-  assert.match(guards[0]({ name: 'bash' }), /聊天模式不执行工具/)
+  assert.match(guards[0]({ name: 'read' }), /聊天模式内部限制/)
+  assert.match(guards[0]({ name: 'bash' }), /聊天模式内部限制/)
   assert.equal(guards[0]({ name: 'web_fetch' }), undefined)
   assert.equal(guards[0]({ name: 'send_sticker' }), undefined)
 })
@@ -1437,5 +1437,6 @@ test('会话提示词：setup 注册动态 section，保存后下一回合立即
 
   await store.setMode(chatKey, 'chat')
   assert.match(sections[1].text(), /聊天模式/)
+  assert.doesNotMatch(sections[1].text(), /切到工作模式|切工作模式/)
   assert.equal(sections[1].interpolate, false)
 })

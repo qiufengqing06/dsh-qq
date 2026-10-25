@@ -434,7 +434,9 @@ test('人设库：id/空文本/超长校验，非法数据在加载时被丢弃'
   await reloaded.load()
   assert.deepEqual(reloaded.personaList().map(item => item.id), ['good'])
   assert.equal(reloaded.defaultPersonaId(), '')
-  assert.deepEqual(Object.keys(reloaded.personaBindings()), ['qqbot:1:dm:v'])
+  assert.deepEqual(Object.keys(reloaded.personaModeBindings()), ['qqbot:1:dm:v'])
+  assert.equal(reloaded.personaBinding('qqbot:1:dm:v', 'work'), 'good')
+  assert.equal(reloaded.personaBinding('qqbot:1:dm:v', 'chat'), '')
 })
 
 test('人设库：跨重启保留', async () => {
@@ -486,4 +488,27 @@ test('模式会话：work/chat 各自指针，过滤会话列表并跨重启保�
   assert.equal(second.modeSession(chatKey, 'work'), 's-work')
   assert.equal(second.modeSession(chatKey, 'chat'), 's-chat')
   assert.equal(second.chat(chatKey).currentSessionId, 's-chat')
+})
+
+test('人设按模式绑定：work/chat 各自生效，互不覆盖', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-persona-mode-'))
+  const s = createStore({ dir })
+  await s.load()
+  await s.setPersona('tech', { name: '技术', text: '工作模式：只聊技术' })
+  await s.setPersona('cute', { name: '可爱', text: '聊天模式：可爱一点' })
+  const chatKey = 'qqbot:1:dm:u'
+  await s.setMode(chatKey, 'work')
+  await s.bindPersona(chatKey, 'tech', 'work')
+  await s.setMode(chatKey, 'chat')
+  await s.bindPersona(chatKey, 'cute', 'chat')
+  assert.equal(s.effectivePromptFor(chatKey, 'work').text, '工作模式：只聊技术')
+  assert.equal(s.effectivePromptFor(chatKey, 'chat').text, '聊天模式：可爱一点')
+  assert.equal(s.effectivePromptFor(chatKey).text, '聊天模式：可爱一点', '不传 mode 用当前模式')
+  assert.equal(s.personaBinding(chatKey, 'work'), 'tech')
+  assert.equal(s.personaBinding(chatKey, 'chat'), 'cute')
+
+  const reopened = createStore({ dir })
+  await reopened.load()
+  assert.equal(reopened.effectivePromptFor(chatKey, 'work').text, '工作模式：只聊技术')
+  assert.equal(reopened.effectivePromptFor(chatKey, 'chat').text, '聊天模式：可爱一点')
 })

@@ -54,6 +54,19 @@ test('环境缓冲：媒体以可读占位进缓冲，纯附件消息不算空',
   assert.match(pending.text, /\[图片\]/)
 })
 
+test('work/chat 缓冲隔离：各模式只看到自己那段', async () => {
+  const { memory } = await setup()
+  memory.observe(groupEvent('工作消息'), 'work')
+  memory.observe(groupEvent('聊天消息'), 'chat')
+  const work = memory.pendingContext(GROUP, 'work')
+  assert.match(work.text, /工作消息/)
+  assert.doesNotMatch(work.text, /聊天消息/)
+  const chat = memory.pendingContext(GROUP, 'chat')
+  assert.match(chat.text, /聊天消息/)
+  assert.doesNotMatch(chat.text, /工作消息/)
+  assert.equal(memory.pendingContext(GROUP, 'work').count, 0, 'work 已推进自己的水位')
+})
+
 test('动态上下文：只给「上次之后」的消息，注入一次即推进水位', async () => {
   const { memory } = await setup()
   memory.observe(groupEvent('第一句'))

@@ -1309,7 +1309,7 @@
     host.appendChild(el('div', { className: 'usage-panel-title', text: '人设库' }));
     host.appendChild(el('div', {
       style: 'font-size:11.5px;color:var(--muted);margin:0 0 8px',
-      text: '命名人设可绑定到指定对话；未绑定则回落到默认人设/旧提示词。每行的「模式」可直接切换工作/聊天。'
+      text: '命名人设可按「工作 / 聊天」分别绑定到同一对话；未绑定则回落到默认人设/旧提示词。每行的「模式」可直接切换工作/聊天。'
     }));
     var modeSupported = S.modes !== undefined && S.modes !== null;
     if (!modeSupported) {
@@ -1360,12 +1360,13 @@
     var prompt = S.prompt || {};
     var overrides = prompt.chats || {};
     var bindings = S.personaBindings || {};
+    var modeBindings = S.personaModeBindings || {};
     // 旧后端没有 state.modes：禁用模式下拉，避免“切换成功”的假象
     var modeSupported = S.modes !== undefined && S.modes !== null;
     var defaultText = prompt.default || '';
     var defaultPersona = personaById(S.defaultPersonaId || '');
     var badge = document.getElementById('badge-prompts');
-    var overrideCount = Object.keys(overrides).length + Object.keys(bindings).length;
+    var overrideCount = Object.keys(overrides).length + Object.keys(bindings).length + Object.keys(modeBindings).length;
     if (badge) badge.textContent = overrideCount === 0 ? '默认' : String(overrideCount);
     var note = document.getElementById('prompts-note');
     if (note) {
@@ -1400,6 +1401,7 @@
     (Array.isArray(S.chatKeys) ? S.chatKeys : []).forEach(function (key) { if (!seen[key]) { seen[key] = true; keys.push(key); } });
     Object.keys(overrides).forEach(function (key) { if (!seen[key]) { seen[key] = true; keys.push(key); } });
     Object.keys(bindings).forEach(function (key) { if (!seen[key]) { seen[key] = true; keys.push(key); } });
+    Object.keys(modeBindings).forEach(function (key) { if (!seen[key]) { seen[key] = true; keys.push(key); } });
     var list = el('div', { style: 'margin-top:16px' });
     list.appendChild(el('div', { className: 'usage-panel-title', text: '按对话绑定' }));
     if (keys.length === 0) {
@@ -1408,7 +1410,9 @@
       keys.forEach(function (key) {
         var info = promptLabel(key);
         var own = overrides[key] || '';
-        var bound = bindings[key] && bindings[key].personaId ? bindings[key].personaId : '';
+        var legacyBound = bindings[key] && bindings[key].personaId ? bindings[key].personaId : '';
+        var boundWork = (modeBindings[key] && modeBindings[key].work && modeBindings[key].work.personaId) || legacyBound || '';
+        var boundChat = (modeBindings[key] && modeBindings[key].chat && modeBindings[key].chat.personaId) || legacyBound || '';
         var currentMode = S.modes && S.modes[key] ? S.modes[key] : 'work';
         var modeSelect = el('select', { 'aria-label': '对话模式', style: 'width:92px' });
         modeSelect.appendChild(el('option', { value: 'work', text: '工作' }));
@@ -1418,16 +1422,21 @@
         if (!modeSupported) modeSelect.title = '重启 DSH 后可用';
         modeSelect.addEventListener('change', function () { setChatMode(key, modeSelect.value); });
 
-        var bindSelect = el('select', { 'aria-label': '对话人设绑定', style: 'width:150px' });
-        bindSelect.appendChild(el('option', { value: '', text: '跟随默认人设' }));
-        (Array.isArray(S.personas) ? S.personas : []).forEach(function (item) {
-          bindSelect.appendChild(el('option', { value: item.id, text: item.name + '（' + item.id + '）' }));
-        });
-        bindSelect.value = bound;
-        bindSelect.addEventListener('change', function () {
-          if (bindSelect.value === '') personaAction({ action: 'unbind', chatKey: key }, '已取消对话绑定');
-          else personaAction({ action: 'bind', chatKey: key, personaId: bindSelect.value }, '已绑定人设');
-        });
+        function personaSelect(mode, value, label) {
+          var select = el('select', { 'aria-label': label + '人设', title: label + '人设', style: 'width:158px' });
+          select.appendChild(el('option', { value: '', text: label + '：跟随默认' }));
+          (Array.isArray(S.personas) ? S.personas : []).forEach(function (item) {
+            select.appendChild(el('option', { value: item.id, text: label + '：' + item.name }));
+          });
+          select.value = value;
+          select.addEventListener('change', function () {
+            if (select.value === '') personaAction({ action: 'unbind', chatKey: key, mode: mode }, '已取消' + label + '人设');
+            else personaAction({ action: 'bind', chatKey: key, personaId: select.value, mode: mode }, '已设置' + label + '人设');
+          });
+          return select;
+        }
+        var workSelect = personaSelect('work', boundWork, '工作');
+        var chatSelect = personaSelect('chat', boundChat, '聊天');
         list.appendChild(el('div', { className: 'group-row', style: 'flex-wrap:wrap;gap:8px' }, [
           el('div', { className: 'grow' }, [
             el('div', { className: 'name', text: info.label }),
@@ -1435,8 +1444,9 @@
           ]),
           el('span', { className: 'pill neutral', text: info.kind }),
           modeSelect,
-          bindSelect,
-          bound !== '' ? pill('人设', 'ok', false) : pill(own === '' ? '跟随默认' : '旧提示词', own === '' ? 'neutral' : 'warn', false),
+          workSelect,
+          chatSelect,
+          (boundWork !== '' || boundChat !== '') ? pill('人设', 'ok', false) : pill(own === '' ? '跟随默认' : '旧提示词', own === '' ? 'neutral' : 'warn', false),
           btn('编辑旧提示词', 'sm', function () { promptEditing = key; renderPrompts(); }),
           own === '' ? null : btn('清除', 'quiet sm', function () { savePrompt(key, ''); })
         ]));

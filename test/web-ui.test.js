@@ -233,10 +233,10 @@ test('降级：没有 webServer 服务时静默跳过（插件照常工作）', 
 
 test('页面：自包含 HTML（无外部资源），含线路/凭据/身份/配置容器与 CSRF 头', async () => {
   const env = await setup()
-const res = await call(env.webUi, { url: PAGE_PATH })
- assert.equal(res.code, 200)
+  const res = await call(env.webUi, { url: PAGE_PATH })
+  assert.equal(res.code, 200)
   assert.match(res.headers['content-type'], /text\/html/)
-  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库', '对话模式', '模式切换暂不可用', 'id="stickers"', '表情包', 'id="chat-control"', '聊天控制']) {
+  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库', '对话模式', '模式切换暂不可用', 'id="stickers"', '表情包', 'id="chat-control"', '聊天控制', 'id="relations"', '关系']) {
     assert.ok(res.body.includes(marker), `页面应包含 ${marker}`)
  }
   // 页面必须自包含：除本机地址外不得有外部 URL，也不得外链脚本/样式
@@ -418,7 +418,7 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
   assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
   assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'modes', 'pagePath', 'participation', 'paths', 'personaBindings', 'personaFavorites', 'personaModeBindings', 'personaRecent', 'personas', 'preferences', 'prompt', 'promptLimit', 'routes', 'schedules', 'stats', 'status', 'stickers', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'modes', 'pagePath', 'participation', 'paths', 'personaBindings', 'personaFavorites', 'personaModeBindings', 'personaRecent', 'personas', 'preferences', 'prompt', 'promptLimit', 'relations', 'routes', 'schedules', 'stats', 'status', 'stickers', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {

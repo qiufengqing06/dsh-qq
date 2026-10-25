@@ -422,6 +422,7 @@
       <a class="nav-item" href="#sec-prompts" data-sec="sec-prompts" title="会话提示词"><span class="ico" data-icon="message"></span><span class="nav-label">会话提示词</span><span class="nav-badge" id="badge-prompts">–</span></a>
       <a class="nav-item" href="#sec-stickers" data-sec="sec-stickers" title="表情包"><span class="ico" data-icon="image"></span><span class="nav-label">表情包</span><span class="nav-badge" id="badge-stickers">–</span></a>
       <a class="nav-item" href="#sec-chat-control" data-sec="sec-chat-control" title="聊天控制"><span class="ico" data-icon="sliders"></span><span class="nav-label">聊天控制</span></a>
+      <a class="nav-item" href="#sec-relations" data-sec="sec-relations" title="关系"><span class="ico" data-icon="user"></span><span class="nav-label">关系</span></a>
       <a class="nav-item" href="#sec-config" data-sec="sec-config" title="配置"><span class="ico" data-icon="sliders"></span><span class="nav-label">配置</span></a>
       <a class="nav-item" href="#sec-trend" data-sec="sec-trend" title="活动量"><span class="ico" data-icon="activity"></span><span class="nav-label">活动量</span></a>
       <a class="nav-item" href="#sec-usage" data-sec="sec-usage" title="Token 消耗"><span class="ico" data-icon="coins"></span><span class="nav-label">Token 消耗</span></a>
@@ -499,6 +500,11 @@
     <section class="card" id="sec-chat-control">
       <div class="card-head"><span class="ico" data-icon="sliders"></span><h2>聊天控制</h2><span class="right" id="chat-control-note"></span></div>
       <div id="chat-control"></div>
+    </section>
+
+    <section class="card" id="sec-relations">
+      <div class="card-head"><span class="ico" data-icon="user"></span><h2>关系</h2><span class="right" id="relations-note"></span></div>
+      <div id="relations"></div>
     </section>
 
     <section class="card" id="sec-config">
@@ -1636,6 +1642,51 @@
     });
   }
 
+  function relationAction(chatKey) {
+    if (!window.confirm('清除这个群的熟识度统计？')) return
+    api('/dsh-qq/api/relations', { chatKey: chatKey }).then(function (res) {
+      if (!res.data || res.data.ok !== true) { notice((res.data && res.data.error) || '清除失败', 'bad'); return }
+      notice('已清除关系统计', 'info');
+      load();
+    }).catch(function (error) { notice(String(error.message || error), 'bad'); });
+  }
+
+  function renderRelations() {
+    var host = document.getElementById('relations');
+    if (!host) return;
+    host.textContent = '';
+    var data = S.relations;
+    var note = document.getElementById('relations-note');
+    if (!data || data.enabled !== true) {
+      if (note) note.textContent = '默认关闭（配置 → 情感/关系统计）';
+      host.appendChild(el('div', { className: 'empty', text: '关系统计默认关闭：开启后只统计发言/被点名/发图/活跃天数，不存正文，也不影响回复。' }));
+      return;
+    }
+    var groups = Array.isArray(data.groups) ? data.groups : [];
+    if (note) note.textContent = groups.length + ' 个群有统计 · 只统计，不参与权限/礼貌';
+    if (groups.length === 0) {
+      host.appendChild(el('div', { className: 'empty', text: '还没有统计。chat 模式群里聊几句后出现。' }));
+      return;
+    }
+    groups.forEach(function (group) {
+      host.appendChild(el('div', { className: 'group-row', style: 'margin-top:10px' }, [
+        el('div', { className: 'grow' }, [
+          el('div', { className: 'name', text: promptLabel(group.chatKey).label }),
+          el('div', { className: 'sub mono', text: group.chatKey })
+        ]),
+        btn('清除本群统计', 'quiet sm', function () { relationAction(group.chatKey); })
+      ]));
+      (group.members || []).forEach(function (member) {
+        host.appendChild(el('div', { className: 'group-row' }, [
+          el('div', { className: 'grow' }, [
+            el('div', { className: 'name', text: (member.name || member.userId) + ' · 熟识度 ' + Number(member.f).toFixed(2) }),
+            el('div', { className: 'sub', text: '活跃 ' + member.activeDays + ' 天 · 发言 ' + member.msgs + ' · 被点名 ' + member.mentions + ' · 发图 ' + member.media })
+          ])
+        ]));
+      });
+    });
+  }
+
   var stickerFilter = 'all';
 
   function stickerAction(payload, message) {
@@ -2089,6 +2140,7 @@
     renderPrompts();
     renderStickers();
     renderChatControl();
+    renderRelations();
     renderConfig();
     renderActivity();
     renderReadonly();

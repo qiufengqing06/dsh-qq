@@ -77,6 +77,20 @@ test('/qq-mode：work/chat 切换、查看与权限', async () => {
   assert.match((await run(control, '/qq-mode chat', 'authorized')).reply, /无权限执行/)
 })
 
+test('/qq-schedule：list/remove 只操作本对话', async () => {
+  const { control, store } = await setup()
+  const chatKey = 'mock:acct:dm:u1'
+  await store.scheduleAdd({
+    id: 's1', chatKey, transportKind: 'mock', accountId: 'acct',
+    target: { kind: 'dm', userId: 'u1' }, prompt: '喝水', kind: 'daily', time: '09:00',
+    at: null, enabled: true, social: false, createdAt: 1, lastRun: '', lastError: '',
+  })
+  assert.match((await run(control, '/qq-schedule list')).reply, /喝水/)
+  assert.match((await run(control, '/qq-schedule remove s1')).reply, /已删除/)
+  assert.equal(store.schedules().length, 0)
+  assert.match((await run(control, '/qq-schedule remove nope')).reply, /没有这个任务/)
+})
+
 test('/qq-persona：list/show/use/clear/set 与权限', async () => {
   const { control, store } = await setup()
   const chatKey = 'mock:acct:dm:u1'

@@ -1211,6 +1211,20 @@
     return hit === null ? id : hit.name;
   }
 
+  /** 收藏优先、最近其次、其余按原顺序（去重）。 */
+  function personaOrder() {
+    var seen = {};
+    var out = [];
+    var favs = Array.isArray(S.personaFavorites) ? S.personaFavorites : [];
+    var recent = Array.isArray(S.personaRecent) ? S.personaRecent : [];
+    favs.concat(recent, (Array.isArray(S.personas) ? S.personas : []).map(function (item) { return item.id; })).forEach(function (id) {
+      if (!id || seen[id] || personaById(id) === null) return;
+      seen[id] = true;
+      out.push(id);
+    });
+    return out;
+  }
+
   /** 人设 API：成功后重新拉状态（页面其它卡片也跟着刷新）。 */
   function personaAction(payload, message) {
     return api('/dsh-qq/api/personas', payload).then(function (res) {
@@ -1343,6 +1357,10 @@
             el('div', { className: 'sub mono', text: item.id + ' · ' + item.chars + ' 字' })
           ]),
           item.id === defaultId ? pill('默认', 'ok', false) : null,
+          (Array.isArray(S.personaFavorites) && S.personaFavorites.indexOf(item.id) >= 0) ? pill('收藏', 'ok', false) : null,
+          btn((Array.isArray(S.personaFavorites) && S.personaFavorites.indexOf(item.id) >= 0) ? '取消收藏' : '收藏', 'quiet sm', function () {
+            personaAction({ action: 'favorite', id: item.id }, '收藏状态已更新');
+          }),
           btn('编辑', 'sm', function () { startPersonaEdit(item.id); }),
           item.id === defaultId ? null : btn('设为默认', 'quiet sm', function () {
             personaAction({ action: 'setDefault', id: item.id }, '默认人设已更新');
@@ -1425,8 +1443,10 @@
         function personaSelect(mode, value, label) {
           var select = el('select', { 'aria-label': label + '人设', title: label + '人设', style: 'width:158px' });
           select.appendChild(el('option', { value: '', text: label + '：跟随默认' }));
-          (Array.isArray(S.personas) ? S.personas : []).forEach(function (item) {
-            select.appendChild(el('option', { value: item.id, text: label + '：' + item.name }));
+          personaOrder().forEach(function (id) {
+            var item = personaById(id);
+            var fav = Array.isArray(S.personaFavorites) && S.personaFavorites.indexOf(id) >= 0;
+            select.appendChild(el('option', { value: id, text: label + '：' + item.name + (fav ? ' ★' : '') }));
           });
           select.value = value;
           select.addEventListener('change', function () {

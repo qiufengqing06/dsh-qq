@@ -283,6 +283,7 @@ test('人设库：state 元数据、正文 GET、增删默认绑定接口', asyn
   assert.deepEqual(state.personas.map(item => item.id).sort(), ['cute', 'tech'])
   assert.equal(state.defaultPersonaId, 'tech')
   assert.equal(state.personaModeBindings[chatKey].work.personaId, 'cute')
+  assert.deepEqual(state.personaRecent, ['cute', 'tech'])
   assert.equal(state.personas.find(item => item.id === 'tech').chars, '你只聊技术。'.length, 'state 只带元数据，不带正文')
 
   const one = await call(env.webUi, { url: `${PAGE_PATH}/api/personas?id=tech` })
@@ -386,7 +387,7 @@ test('状态 API：线路/身份/字段/活动/脱敏凭据', async () => {
   assert.deepEqual(state.models.providers.map(entry => entry.id), ['deepseek-account', 'deepseek-official'])
   assert.deepEqual(state.models.providers[0].models.map(entry => entry.id), ['deepseek-flash', 'deepseek-pro'])
   assert.deepEqual(state.models.globalDefault, { provider: 'deepseek-account', model: 'deepseek-flash' })
-  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'modes', 'pagePath', 'paths', 'personaBindings', 'personaModeBindings', 'personas', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
+  assert.deepEqual(Object.keys(state).sort(), ['activity', 'alerts', 'approvals', 'chatKeys', 'config', 'connections', 'credentials', 'defaultPersonaId', 'fields', 'groups', 'identity', 'issues', 'lines', 'mode', 'models', 'modes', 'pagePath', 'paths', 'personaBindings', 'personaFavorites', 'personaModeBindings', 'personaRecent', 'personas', 'prompt', 'promptLimit', 'routes', 'stats', 'status', 'transport', 'url', 'usage', 'values', 'version'], '状态字段与文档一致（没有额外面板数据）')
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {

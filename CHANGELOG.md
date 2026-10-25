@@ -3,6 +3,13 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.32
+
+- 定时提醒/主动任务：`store.schedules` + `lib/scheduler.js`（30s tick、安静时段、每日上限、忙时跳过、错过不补）。
+- 新增 `schedule_task` 工具与 `/qq-schedule list|remove`；固定提醒 work/chat 都可用，社交主动仅 chat。
+- 官方线/个人线都按 transport capabilities 检查主动消息；失败写 lastError，不无限重试。
+- 人设库增加最近使用/收藏：页面人设选择按收藏/最近排序，人设卡可收藏/取消收藏。
+
 ## v0.7.31
 
 - chat 拆分修复：两段短回复（总长 ≤80）现在也会拆成两条；单段短句仍保持一条。

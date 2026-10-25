@@ -512,3 +512,47 @@ test('人设按模式绑定：work/chat 各自生效，互不覆盖', async () =
   assert.equal(reopened.effectivePromptFor(chatKey, 'work').text, '工作模式：只聊技术')
   assert.equal(reopened.effectivePromptFor(chatKey, 'chat').text, '聊天模式：可爱一点')
 })
+
+test('人设最近使用/收藏：记录、切换、删除清理', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-persona-recent-'))
+  const s = createStore({ dir })
+  await s.load()
+  await s.setPersona('tech', { name: '技术', text: '技术' })
+  await s.setPersona('cute', { name: '可爱', text: '可爱' })
+  const key = 'qqbot:1:dm:u'
+  await s.bindPersona(key, 'tech', 'work')
+  await s.bindPersona(key, 'cute', 'chat')
+  assert.deepEqual(s.personaRecentList(), ['cute', 'tech'])
+  assert.equal(await s.togglePersonaFavorite('tech'), true)
+  assert.deepEqual(s.personaFavoriteList(), ['tech'])
+  assert.equal(await s.togglePersonaFavorite('tech'), false)
+  assert.deepEqual(s.personaFavoriteList(), [])
+  await s.togglePersonaFavorite('tech')
+  await s.removePersona('tech')
+  assert.deepEqual(s.personaFavoriteList(), [])
+  assert.deepEqual(s.personaRecentList(), ['cute'])
+})
+
+test('定时任务：增删查、跨重启保留、非法条目加载时丢弃', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-schedules-'))
+  const first = createStore({ dir })
+  await first.load()
+  const task = {
+    id: 's1', chatKey: 'qqbot:1:group:2', transportKind: 'qqbot', accountId: '1',
+    target: { kind: 'group', groupId: '2' }, prompt: '早安', kind: 'daily', time: '09:00',
+    at: null, enabled: true, social: false, createdAt: 1, lastRun: '', lastError: '',
+  }
+  await first.scheduleAdd(task)
+  assert.equal(first.schedules().length, 1)
+  await first.scheduleMark('s1', { lastRun: '2026-10-25', lastError: 'x' })
+  assert.equal(first.schedules()[0].lastRun, '2026-10-25')
+  assert.equal(first.schedules()[0].lastError, 'x')
+  await assert.rejects(() => first.scheduleAdd({ ...task, id: 's1' }), /id 重复/)
+
+  const second = createStore({ dir })
+  await second.load()
+  assert.equal(second.schedules().length, 1)
+  assert.equal(second.schedules()[0].prompt, '早安')
+  assert.equal(await second.scheduleRemove('s1'), true)
+  assert.equal(second.schedules().length, 0)
+})

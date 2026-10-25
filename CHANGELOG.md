@@ -3,6 +3,12 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.39
+
+- 聊天模式工具边界：agentCtx.tools.guard 只放行 web_fetch/web_search/send_sticker/list_stickers/qq_group_note/schedule_task；
+  read/write/edit/bash/run_code/任务/子代理等一律拒绝，并提示切 /qq-mode work。
+- 聊天提示词同步说明：要总结文件/改代码/跑测试时像人一样说明需切工作模式；链接可看但只聊一两句。
+
 ## v0.7.38
 
 - 明确偏好/静默：store.preferences（对话 proactiveUntil/stickers、成员 name/proactiveUntil）。

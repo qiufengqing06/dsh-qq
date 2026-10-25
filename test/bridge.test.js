@@ -1386,6 +1386,23 @@ test('停止/切模式：已排队的聊天气泡不再发送（回复代际）'
   assert.equal(second.transport.dump().filter(item => item.kind === 'text').length, 0, '切到 work 后旧代际不得再发送')
 })
 
+test('聊天模式工具边界：read/bash 被 guard 拒绝，web_fetch/表情放行', async () => {
+  const { bridge, transport, agents, store } = await setup()
+  await bridge.handleUserMessage(transport.injectText('聊天'))
+  await store.setMode(store.chatKeys()[0], 'chat')
+  const guards = []
+  const agentCtx = {
+    systemPrompt: { section: () => () => {}, getSectionOrder: () => 100 },
+    tools: { guard: guard => { guards.push(guard); return () => {} } },
+  }
+  await agents.created[0].setup(agentCtx, {})
+  assert.equal(guards.length, 1)
+  assert.match(guards[0]({ name: 'read' }), /聊天模式不执行工具/)
+  assert.match(guards[0]({ name: 'bash' }), /聊天模式不执行工具/)
+  assert.equal(guards[0]({ name: 'web_fetch' }), undefined)
+  assert.equal(guards[0]({ name: 'send_sticker' }), undefined)
+})
+
 test('会话提示词：setup 注册动态 section，保存后下一回合立即生效', async () => {
   const { bridge, transport, agents, store } = await setup({}, {}, { capabilities: { markdown: true } })
   await bridge.handleUserMessage(transport.injectText('ping'))

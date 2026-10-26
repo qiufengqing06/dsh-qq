@@ -3,6 +3,11 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.49
+
+- 修复配置页所有开关点不动：.switch span 盖住了透明 checkbox，补 pointer-events:none，点击落到 input。
+- 验证 elementFromPoint 命中的是 INPUT 而不是 SPAN。
+
 ## v0.7.48
 
 - 表情包视觉打标：默认 deepseek-account/deepseek-flash，80 张/天；输出 kind/tags/desc。

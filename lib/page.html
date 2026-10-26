@@ -1716,6 +1716,7 @@
     var counts = data;
     if (badge) badge.textContent = String(counts.total || 0);
     if (note) note.textContent = '候选 ' + (counts.candidates || 0) + ' · 收藏 ' + (counts.library || 0) + ' · 回收站 ' + (counts.trash || 0) + ' · ' + Math.round((counts.bytes || 0) / 1024) + ' KB';
+    host.appendChild(el('div', { className: 'hint', style: 'margin-bottom:10px', text: '自动收藏的是群/私聊里的所有图片，不区分表情包和截图；候选不会自动发。请用标签/收藏整理，不是表情包的丢回收站。' }));
     var tabs = el('div', { className: 'actions', style: 'margin-bottom:10px;flex-wrap:wrap' });
     [['all', '全部'], ['candidate', '待整理'], ['library', '收藏'], ['trash', '回收站']].forEach(function (pair) {
       var count = pair[0] === 'all' ? counts.total : pair[0] === 'candidate' ? counts.candidates : counts[pair[0]];
@@ -1741,7 +1742,8 @@
       var actions = el('div', { className: 'actions', style: 'margin-top:6px;gap:4px;flex-wrap:wrap' });
       if (item.state === 'candidate') actions.appendChild(btn('收藏', 'sm', function () { stickerAction({ action: 'keep', id: item.id }, '已移入收藏'); }));
       if (item.state === 'trash') actions.appendChild(btn('恢复', 'sm', function () { stickerAction({ action: 'restore', id: item.id }, '已恢复到候选'); }));
-      if (item.state !== 'trash') actions.appendChild(btn('回收站', 'quiet sm', function () { stickerAction({ action: 'trash', id: item.id }, '已移入回收站'); }));
+      if (item.state === 'candidate') actions.appendChild(btn('不是表情包', 'quiet sm', function () { stickerAction({ action: 'trash', id: item.id }, '已移入回收站'); }));
+      else if (item.state !== 'trash') actions.appendChild(btn('回收站', 'quiet sm', function () { stickerAction({ action: 'trash', id: item.id }, '已移入回收站'); }));
       actions.appendChild(btn('标签', 'quiet sm', function () {
         var tags = window.prompt('标签（空格/逗号分隔）', item.tags.join(' '));
         if (tags === null) return;

@@ -51,10 +51,11 @@ test('自动收藏：SHA-256 去重、多来源、候选、文件落盘', async 
   assert.deepEqual(await readFile(join(env.dir, 'stickers', 'files', files[0])), PNG)
 })
 
-test('自动收藏只在 chat 模式/群聊；work/私聊不采集', async () => {
+test('自动收藏只在 chat 模式；work 不采集，私聊采集', async () => {
   const env = await setup()
   assert.equal(await env.store.capture(env.ev, { download: env.download, mode: 'work' }), 0)
-  assert.equal(await env.store.capture({ ...env.ev, target: { kind: 'dm', userId: 'u1' }, chatKey: 'qqbot:1:dm:u1' }, { download: env.download, mode: 'chat' }), 0)
+  const dm = { ...env.ev, target: { kind: 'dm', userId: 'u1' }, chatKey: 'qqbot:1:dm:u1' }
+  assert.equal(await env.store.capture(dm, { download: env.download, mode: 'chat' }), 1)
 })
 
 test('跨群共享与 noShareGroups：共享图可见、本群图不串群', async () => {
@@ -128,4 +129,17 @@ test('明确静默：本群关闭表情时工具拒绝发送', async () => {
   assert.equal(result.ok, false)
   assert.match(result.message, /关闭表情包/)
   assert.equal(env.sent.length, 0)
+})
+
+test('私聊图片也收藏，但只在本私聊可见（不跨群）', async () => {
+  const env = await setup()
+  const dm = {
+    ...env.ev,
+    target: { kind: 'dm', userId: 'u1' },
+    chatKey: 'qqbot:1:dm:u1',
+  }
+  assert.equal(await env.store.capture(dm, { download: env.download, mode: 'chat' }), 1)
+  assert.equal(env.store.list(dm.chatKey).length, 1)
+  assert.equal(env.store.list('qqbot:1:dm:other').length, 0)
+  assert.equal(env.store.list('qqbot:1:group:200').length, 0, '私聊图不跨群')
 })

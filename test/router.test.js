@@ -106,6 +106,31 @@ test('群消息 @机器人（owner）→ 进入桥接', async () => {
   assert.equal(agents.created.length, 1)
 })
 
+test('群成员默认不再逐个配对；DM 仍走配对；allowlist 保持严格', async () => {
+  const { router, transport, agents, store } = await setup()
+  const group = transport.inject({
+    target: { kind: 'group', groupId: 'g1' },
+    sender: { id: 'member-x', name: '群友' },
+    text: '大家好',
+    mentioned: true,
+  })
+  assert.equal((await router.routeInbound(group)).handled, 'message')
+  assert.equal(agents.created.length, 1)
+  assert.equal(store.pendingPairing().length, 0)
+
+  const dm = transport.inject({ text: '你好', sender: { id: 'member-y', name: '陌生人' } })
+  assert.equal((await router.routeInbound(dm)).handled, 'pairing', 'DM 仍按陌生人策略')
+
+  const strict = await setup({ pairingPolicy: 'allowlist' })
+  const strictGroup = strict.transport.inject({
+    target: { kind: 'group', groupId: 'g1' },
+    sender: { id: 'member-z', name: '群友' },
+    text: '大家好',
+    mentioned: true,
+  })
+  assert.equal((await strict.router.routeInbound(strictGroup)).handled, 'rejected')
+})
+
 test('未授权用户 → 配对流程，不创建会话', async () => {
   const { router, transport, agents, store } = await setup()
   const ev = transport.inject({ text: '你好', sender: { id: 'stranger', name: '路人' } })

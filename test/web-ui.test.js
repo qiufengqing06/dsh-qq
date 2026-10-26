@@ -679,3 +679,25 @@ test('人设精选与试聊API：保存校验、历史ID保留、CSRF、草稿�
   assert.deepEqual(env.store.snapshot(), before)
   assert.equal(env.transport.sentTestMessages.length, 0)
 })
+
+test('表情包分页API：完整分类计数、越界回退及参数校验', async () => {
+  let args
+  const env = await setup({ stickers: {
+    stats: () => ({ total: 131, candidates: 125, library: 6, trash: 0 }),
+    listAll: (limit, options) => { args = { limit, ...options }; return [] },
+  } })
+  const get = query => call(env.webUi, { url: '/dsh-qq/api/stickers?' + query })
+  let result = await get('filter=candidate&page=10&pageSize=12')
+  assert.equal(result.code, 200)
+  assert.equal(result.json().total, 125)
+  assert.deepEqual(args, { limit: 12, state: 'candidate', offset: 120 })
+  result = await get('filter=library&page=10&pageSize=12')
+  assert.equal(result.json().page, 0)
+  assert.equal(result.json().total, 6)
+  result = await get('filter=trash&page=10&pageSize=4')
+  assert.equal(result.json().page, 0)
+  assert.equal(result.json().total, 0)
+  for (const query of ['filter=bad', 'page=-1', 'page=1.1', 'pageSize=0', 'pageSize=101', 'pageSize=no']) {
+    assert.equal((await get(query)).code, 400, query)
+  }
+})

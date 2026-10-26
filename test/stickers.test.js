@@ -46,6 +46,27 @@ function sendOptions(env, extra = {}) {
   return { chatKey: env.ev.chatKey, target: env.ev.target, transport: env.transport, mode: 'chat', ...extra }
 }
 
+test('管理分页：按分类筛选后取页，时间相同时顺序稳定，可读取第120张之后的图片', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-sticker-pages-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  await mkdir(join(dir, 'stickers'), { recursive: true })
+  const items = Object.fromEntries(Array.from({ length: 136 }, (_, n) => {
+    const id = n.toString(16).padStart(64, '0')
+    return [id, { id, sha256: id, file: id + '.png', createdAt: 1, state: n < 126 ? 'candidate' : 'library', sources: [], tags: [] }]
+  }))
+  await writeFile(join(dir, 'stickers/index.json'), JSON.stringify({ version: 1, items }))
+  const store = createStickerStore({ dir, config: resolveConfig({ transport: 'mock', dataDir: dir }) })
+  await store.load()
+  const first = store.listAll(12, { state: 'candidate', offset: 0 })
+  const last = store.listAll(12, { state: 'candidate', offset: 120 })
+  assert.equal(first.length, 12)
+  assert.equal(last.length, 6)
+  assert.equal(last[0].id, (120).toString(16).padStart(64, '0'))
+  assert.equal(store.listAll(12, { state: 'library', offset: 0 }).length, 10)
+  assert.equal(store.listAll(12, { state: 'trash', offset: 0 }).length, 0)
+  assert.equal(new Set([...first, ...last].map(item => item.id)).size, 18)
+})
+
 test('图片类型只用魔数判断，SVG/文本拒绝', () => {
   assert.equal(imageExtOf(PNG), 'png')
   assert.equal(imageExtOf(Buffer.from('<svg></svg>')), '')

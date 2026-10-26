@@ -350,6 +350,9 @@
   .persona-toolbar .hint { flex:none; white-space:nowrap; }
   .persona-sticker-selected { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
   .persona-sticker-selected .btn { max-width:100%; height:auto; min-height:32px; padding:6px 10px; white-space:normal; text-align:left; overflow-wrap:anywhere; }
+  .sticker-grid { display:grid; grid-template-columns:repeat(var(--sticker-columns,1),minmax(0,1fr)); gap:12px; }
+  .sticker-pager { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  .sticker-pager .hint { margin-right:auto; font-variant-numeric:tabular-nums; }
   .persona-sticker-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:8px; max-height:330px; overflow:auto; padding:3px; }
   .persona-sticker-choice { appearance:none; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); color:var(--text); padding:8px; cursor:pointer; font:inherit; text-align:left; min-width:0; content-visibility:auto; contain-intrinsic-size:112px 142px; }
   .persona-sticker-choice:hover { border-color:var(--hue); }
@@ -1934,6 +1937,59 @@
   }
 
   var stickerFilter = 'all';
+  var stickerPage = 0;
+  var stickerColumns = 1;
+  var stickerPageData = null;
+  var stickerRequest = 0;
+  var stickerLoading = false;
+  var stickerError = '';
+  var stickerLegacy = false;
+  var stickerFocus = '';
+
+  // Match the grid's 150px minimum card width and 12px gap; two rows per page.
+  if (typeof ResizeObserver === 'function') {
+    var stickerObserver = new ResizeObserver(function (entries) {
+      var width = entries[0].contentRect.width;
+      if (width <= 0) return;
+      var columns = Math.max(1, Math.min(50, Math.floor((width + 12) / 162)));
+      if (columns === stickerColumns) return;
+      stickerPage = Math.floor(stickerPage * stickerColumns / columns);
+      stickerColumns = columns;
+      stickerPageData = null;
+      if (S) renderStickers();
+    });
+    stickerObserver.observe(document.getElementById('stickers'));
+  }
+
+  function loadStickerPage() {
+    var request = ++stickerRequest;
+    var filter = stickerFilter;
+    var size = stickerColumns * 2;
+    stickerLoading = true;
+    stickerError = '';
+    renderStickers(false);
+    api('/dsh-qq/api/stickers?filter=' + filter + '&page=' + stickerPage + '&pageSize=' + size).then(function (res) {
+      if (request !== stickerRequest) return;
+      if (res.status === 404 || res.status === 405) {
+        // The HTML refreshes before an older backend reloads: keep its loaded images usable.
+        var items = ((S.stickers && S.stickers.items) || []).filter(function (item) { return filter === 'all' || item.state === filter; });
+        var page = Math.min(stickerPage, Math.max(0, Math.ceil(items.length / size) - 1));
+        stickerPageData = { items: items.slice(page * size, (page + 1) * size), total: items.length, page: page, pageSize: size };
+        stickerLegacy = true;
+      } else {
+        if (!res.data || res.data.ok !== true) throw new Error((res.data && res.data.error) || '读取表情包失败');
+        stickerPageData = res.data;
+        stickerLegacy = false;
+      }
+      stickerPage = stickerPageData.page;
+    }).catch(function (error) {
+      if (request === stickerRequest) stickerError = String(error.message || error);
+    }).finally(function () {
+      if (request !== stickerRequest) return;
+      stickerLoading = false;
+      renderStickers(false);
+    });
+  }
 
   function stickerAction(payload, message) {
     api('/dsh-qq/api/stickers', payload).then(function (res) {
@@ -1946,10 +2002,14 @@
     }).catch(function (error) { notice(String(error.message || error), 'bad'); });
   }
 
-  function renderStickers() {
+  function renderStickers(refresh) {
     var host = document.getElementById('stickers');
     if (!host) return;
+    if (refresh !== false && S && S.stickers) { loadStickerPage(); return; }
+    var focused = host.contains(document.activeElement) ? document.activeElement.id : '';
+    if (focused) stickerFocus = focused;
     host.textContent = '';
+    host.setAttribute('aria-busy', stickerLoading ? 'true' : 'false');
     var data = S.stickers;
     var badge = document.getElementById('badge-stickers');
     var note = document.getElementById('stickers-note');
@@ -1971,26 +2031,37 @@
     var tabs = el('div', { className: 'actions', style: 'margin-bottom:10px;flex-wrap:wrap' });
     [['all', '全部'], ['candidate', '待整理'], ['library', '收藏'], ['trash', '回收站']].forEach(function (pair) {
       var count = pair[0] === 'all' ? counts.total : pair[0] === 'candidate' ? counts.candidates : counts[pair[0]];
-      tabs.appendChild(btn(pair[1] + '（' + (count ?? 0) + '）', (stickerFilter === pair[0] ? 'primary ' : 'quiet ') + 'sm', function () {
+      var tab = btn(pair[1] + '（' + (count ?? 0) + '）', (stickerFilter === pair[0] ? 'primary ' : 'quiet ') + 'sm', function () {
         stickerFilter = pair[0];
+        stickerPage = 0;
+        stickerPageData = null;
         renderStickers();
-      }));
+      });
+      tab.id = 'sticker-filter-' + pair[0];
+      tab.setAttribute('aria-pressed', String(stickerFilter === pair[0]));
+      tabs.appendChild(tab);
     });
     host.appendChild(tabs);
-    var items = (Array.isArray(data.items) ? data.items : []).filter(function (item) { return stickerFilter === 'all' || item.state === stickerFilter; });
-    if (items.length === 0) {
+    if (stickerLegacy) host.appendChild(el('p', { className: 'hint', text: '当前仅显示旧后端已加载的图片；重载插件或重启 DSH 后，可翻阅完整图库。' }));
+    if (stickerError) host.appendChild(el('div', { role: 'alert', className: 'actions' }, [
+      el('span', { text: stickerError }), btn('重新读取', 'quiet sm', function () { renderStickers(); })
+    ]));
+    var pageData = stickerPageData || { items: [], total: 0, page: 0, pageSize: stickerColumns * 2 };
+    var items = pageData.items;
+    if (!stickerPageData && stickerLoading) {
+      host.appendChild(el('div', { className: 'empty', role: 'status', text: '正在读取表情包…' }));
+    } else if (items.length === 0 && !stickerError) {
       host.appendChild(el('div', { className: 'empty', text: '这个分类还没有图。chat 模式群里发图会自动进候选。' }));
-      return;
     }
-    var grid = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px' });
+    var grid = el('div', { className: 'sticker-grid', style: '--sticker-columns:' + stickerColumns });
     items.forEach(function (item) {
       var card = el('div', { style: 'border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface)' });
       var img = el('img', { src: '/dsh-qq/api/stickers/image?id=' + encodeURIComponent(item.id), alt: item.tags.join(' / ') || item.id.slice(0, 12), loading: 'lazy', style: 'width:100%;height:120px;object-fit:cover;border-radius:6px;background:var(--raised)' });
       card.appendChild(img);
-      card.appendChild(el('div', { className: 'sub mono', style: 'margin-top:6px;overflow:hidden;text-overflow:ellipsis', title: item.id, text: item.id.slice(0, 16) + '…' }));
+      card.appendChild(el('div', { className: 'sub mono', style: 'margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: item.id, text: item.id.slice(0, 16) + '…' }));
       card.appendChild(el('div', { className: 'sub', style: 'min-height:18px', text: item.tags.join(' / ') || '无标签' }));
       var source = item.sourceText || (item.sourceName ? item.sourceName + ' 发' : (item.sourceAt ? '群聊图片' : '未知'));
-      card.appendChild(el('div', { className: 'hint', style: 'min-height:18px;overflow:hidden;text-overflow:ellipsis', title: source, text: '来源：' + source }));
+      card.appendChild(el('div', { className: 'hint', style: 'min-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: source, text: '来源：' + source }));
       var actions = el('div', { className: 'actions', style: 'margin-top:6px;gap:4px;flex-wrap:wrap' });
       if (item.state === 'candidate') actions.appendChild(btn('收藏', 'sm', function () { stickerAction({ action: 'keep', id: item.id }, '已移入收藏'); }));
       if (item.state === 'trash') actions.appendChild(btn('恢复', 'sm', function () { stickerAction({ action: 'restore', id: item.id }, '已恢复到候选'); }));
@@ -2008,6 +2079,22 @@
       grid.appendChild(card);
     });
     host.appendChild(grid);
+    var pages = Math.max(1, Math.ceil(pageData.total / pageData.pageSize));
+    var pager = el('nav', { className: 'sticker-pager', 'aria-label': '表情包分页' });
+    pager.appendChild(el('span', { className: 'hint', role: 'status', 'aria-live': 'polite', text: '共 ' + pageData.total + ' 张 · 第 ' + (pageData.page + 1) + ' / ' + pages + ' 页 · 每页两行' + (stickerLoading ? ' · 正在读取…' : '') }));
+    [['上一页', -1], ['下一页', 1]].forEach(function (item) {
+      var button = btn(item[0], 'quiet sm', function () { stickerPage = pageData.page + item[1]; renderStickers(); });
+      button.id = item[1] < 0 ? 'sticker-prev' : 'sticker-next';
+      button.disabled = stickerLoading || (item[1] < 0 ? pageData.page <= 0 : pageData.page >= pages - 1);
+      pager.appendChild(button);
+    });
+    host.appendChild(pager);
+    if (!stickerLoading && stickerFocus && (document.activeElement === document.body || host.contains(document.activeElement))) {
+      var restoreFocus = document.getElementById(stickerFocus);
+      if (restoreFocus && restoreFocus.disabled) restoreFocus = document.getElementById(stickerPage > 0 ? 'sticker-prev' : 'sticker-filter-all');
+      if (restoreFocus) restoreFocus.focus({ preventScroll: true });
+    }
+    if (!stickerLoading) stickerFocus = '';
   }
 
   function renderConfig() {

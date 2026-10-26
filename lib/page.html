@@ -100,7 +100,7 @@
   .app.rail .nav-item .ico { width:20px; }
   .app.rail .side-foot { align-items:center; }
   .app.rail .theme-btn, .app.rail .rail-btn { justify-content:center; padding:9px 0; width:100%; }
-  @media (max-width:1020px) { .app.rail { grid-template-columns:1fr; } .app.rail .brand-text, .app.rail .nav-label, .app.rail .nav-badge { display:initial; } .app.rail .side-ver { display:none; } .app.rail #theme-label, .app.rail #rail-label { display:initial; } }
+  @media (max-width:1020px) { .app.rail { grid-template-columns:minmax(0,1fr); } .app.rail .brand-text, .app.rail .nav-label, .app.rail .nav-badge { display:initial; } .app.rail .side-ver { display:none; } .app.rail #theme-label, .app.rail #rail-label { display:initial; } }
   /* ---------- 近 7 天活动量 ---------- */
   .trend { display:grid; grid-template-columns:repeat(7,1fr); gap:10px; align-items:end; height:118px; margin-top:6px; }
   .trend .col { display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end; }
@@ -128,6 +128,7 @@
   section.card { scroll-margin-top: 90px; }
   .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-xl); box-shadow:var(--shadow-card); padding:18px 20px; }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
   .card-head { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .card { min-width:0; }
   .card-head h2 { font-size:17px; }
   .card-head .ico { display:grid; place-items:center; width:26px; height:26px; color:var(--hue); background:var(--hue-pale); border-radius:8px; }
   .card-head .right { margin-left:auto; display:flex; align-items:center; gap:12px; font-size:12.5px; color:var(--muted); }
@@ -306,6 +307,7 @@
   .usage-kpi .v { margin-top:4px; font-size:24px; font-weight:600; letter-spacing:-.02em; }
   .usage-kpi .v small { margin-left:4px; font-size:12px; font-weight:400; color:var(--muted); }
   .usage-grid { display:grid; grid-template-columns:1.05fr .95fr; gap:22px; align-items:start; }
+  .usage-grid > div { min-width:0; overflow-x:auto; }
   .usage-panel-title { font-size:12px; font-weight:600; color:var(--muted); margin-bottom:10px; }
   .usage-daychart { display:grid; grid-template-columns:repeat(14,1fr); gap:7px; align-items:end; height:128px; }
   .usage-daychart .col { display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end; }
@@ -338,6 +340,38 @@
   .group-editor textarea:focus { outline:none; border-color:var(--hue); box-shadow:0 0 0 3px var(--hue-pale); }
   .group-editor .row { display:flex; align-items:center; gap:10px; }
   .group-editor .hint { flex:1; font-size:11.5px; color:var(--muted); }
+  .persona-fields { display:grid; grid-template-columns:160px minmax(0,1fr); gap:10px; }
+  .persona-section { padding:14px 0 4px; border-top:1px solid var(--rule); min-width:0; }
+  .persona-section h3 { margin:0 0 6px; font-size:14px; font-weight:600; }
+  .persona-section .hint { margin:4px 0 10px; font-size:12px; line-height:1.6; }
+  .persona-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:10px 0; }
+  .persona-toolbar input { flex:1; min-width:160px; height:36px; padding:0 10px; border:1px solid var(--control); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); font:inherit; font-size:13px; }
+  .persona-toolbar input:focus-visible { outline:2px solid var(--hue); outline-offset:2px; }
+  .persona-toolbar .hint { flex:none; white-space:nowrap; }
+  .persona-sticker-selected { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+  .persona-sticker-selected .btn { max-width:100%; height:auto; min-height:32px; padding:6px 10px; white-space:normal; text-align:left; overflow-wrap:anywhere; }
+  .persona-sticker-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:8px; max-height:330px; overflow:auto; padding:3px; }
+  .persona-sticker-choice { appearance:none; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); color:var(--text); padding:8px; cursor:pointer; font:inherit; text-align:left; min-width:0; content-visibility:auto; contain-intrinsic-size:112px 142px; }
+  .persona-sticker-choice:hover { border-color:var(--hue); }
+  .persona-sticker-choice[aria-pressed="true"] { border-color:var(--hue); background:var(--hue-pale); }
+  .persona-sticker-choice:focus-visible { outline:2px solid var(--hue); outline-offset:2px; }
+  .persona-sticker-choice img { display:block; width:100%; height:80px; object-fit:contain; margin-bottom:6px; }
+  .persona-sticker-caption { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; font-size:12px; line-height:1.5; }
+  .persona-status { min-height:20px; font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
+  .persona-status.bad { color:var(--negative); }
+  .persona-effective { padding:12px 14px; margin:0 0 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; min-width:0; }
+  .persona-effective[hidden] { display:none; }
+  .persona-effective p { margin:6px 0; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
+  .persona-effective pre { margin:10px 0; white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; font-size:12.5px; line-height:1.7; max-height:280px; overflow:auto; }
+  .persona-effective summary { cursor:pointer; font-size:12px; color:var(--muted); }
+  .persona-trial-log { display:flex; flex-direction:column; gap:10px; max-height:320px; overflow:auto; margin:10px 0; }
+  .persona-trial-message { padding:10px 12px; background:var(--surface-2); border-radius:10px; font-size:13px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .persona-trial-message strong { display:block; margin-bottom:3px; font-size:11.5px; color:var(--muted); font-weight:500; }
+  .group-editor .persona-trial textarea { min-height:78px; }
+  .persona-trial .actions, .group-editor > .row { flex-wrap:wrap; }
+  .group-editor > .row > .hint:first-child { flex:0 0 auto; }
+  .group-editor > .row > div.hint { flex:1 1 200px; min-width:160px; }
+  @media (max-width:560px) { .persona-fields { grid-template-columns:1fr; } .persona-sticker-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   .test-row { display:grid; grid-template-columns:150px 110px 1fr 1.4fr auto; gap:10px; align-items:center; }
   .test-row select, .test-row input { height:36px; padding:0 10px; border:1px solid var(--border); border-radius:9px; background:var(--surface-2); color:var(--text); font:inherit; font-size:13px; min-width:0; }
   .test-row select:focus, .test-row input:focus { outline:none; border-color:var(--hue); box-shadow:0 0 0 3px var(--hue-pale); }
@@ -355,7 +389,7 @@
   @media (max-width:1180px) { .stats { grid-template-columns:repeat(2,1fr); } .cfg-grid { grid-template-columns:1fr 1fr; } .usage-kpis { grid-template-columns:1fr 1fr; } .usage-grid { grid-template-columns:1fr; } }
   @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
   @media (max-width:1020px) {
-    .app { grid-template-columns:1fr; }
+    .app { grid-template-columns:minmax(0,1fr); }
     .sidebar { position:sticky; top:0; z-index:20; height:auto; flex-direction:row; align-items:center; gap:10px; padding:12px 16px; background:color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--border); }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
     .brand-mark { width:30px; height:30px; }
     .brand-sub { display:none; }
@@ -1218,6 +1252,9 @@
 
   var personaEditing = '';
   var personaDraft = null;
+  var personaStickerState = null;
+  var personaTrial = null;
+  var personaPreviews = {};
 
   function personaById(id) {
     var list = Array.isArray(S.personas) ? S.personas : [];
@@ -1252,6 +1289,7 @@
         return false;
       }
       if (message) notice(message, 'info');
+      personaPreviews = {};
       load();
       return true;
     }).catch(function (error) { notice(String(error.message || error), 'bad'); return false; });
@@ -1276,7 +1314,9 @@
   function startPersonaEdit(id) {
     if (id === '') {
       personaEditing = '@new';
-      personaDraft = { id: '', name: '', text: '' };
+      personaDraft = { id: '', name: '', text: '', stickerIds: [] };
+      personaStickerState = null;
+      personaTrial = null;
       renderPrompts();
       return;
     }
@@ -1285,8 +1325,195 @@
       personaEditing = id;
       // 旧后端详情没有 id；编辑对象以用户点开的列表项为准。
       personaDraft = Object.assign({}, res.data.persona, { id: id });
+      personaStickerState = null;
+      personaTrial = null;
       renderPrompts();
     }).catch(function (error) { notice(String(error.message || error), 'bad'); });
+  }
+
+  function personaStickerIds(draft) {
+    return (Array.isArray(draft && draft.stickerIds) ? draft.stickerIds : []).filter(function (id, index, ids) {
+      return typeof id === 'string' && id !== '' && ids.indexOf(id) === index;
+    });
+  }
+
+  function personaStickerPicker() {
+    var picker = personaStickerState || (personaStickerState = { items: [], loaded: false, loading: false, error: '', query: '' });
+    var box = el('section', { className: 'persona-section', 'aria-label': '精选表情' });
+    box.appendChild(el('h3', { text: '精选表情' }));
+    box.appendChild(el('p', { className: 'hint', text: '为这个人设优先选用的表情。不会强制每次发图，仍遵守对话可见范围、关闭表情等设置。保存人设后生效。' }));
+    var search = el('input', { type: 'search', id: 'persona-sticker-search', name: 'persona-sticker-search', 'aria-label': '搜索精选表情', autocomplete: 'off', placeholder: '搜索画面描述、标签或编号…', value: picker.query });
+    var count = el('span', { className: 'hint', id: 'persona-sticker-count', 'aria-live': 'polite' });
+    var selected = el('div', { className: 'persona-sticker-selected', id: 'persona-sticker-selected' });
+    var status = el('div', { className: 'persona-status', role: 'status', 'aria-live': 'polite' });
+    var grid = el('div', { className: 'persona-sticker-grid', id: 'persona-sticker-grid' });
+    var retry = btn('重新读取图库', 'quiet sm', function () { readLibrary(); });
+    box.appendChild(el('div', { className: 'persona-toolbar' }, [search, count, retry]));
+    box.appendChild(selected);
+    box.appendChild(status);
+    box.appendChild(grid);
+    var labelOf = function (item) { return item.desc || (Array.isArray(item.tags) ? item.tags.join(' / ') : '') || item.id; };
+    var toggle = function (id) {
+      var ids = personaStickerIds(personaDraft);
+      var index = ids.indexOf(id);
+      if (index >= 0) ids.splice(index, 1);
+      else if (ids.length < 40) ids.push(id);
+      else { status.textContent = '最多选择 40 张，先移除一张再添加。'; status.className = 'persona-status bad'; return; }
+      personaDraft.stickerIds = ids;
+      draw();
+      var nextFocus = document.getElementById('persona-sticker-choice-' + encodeURIComponent(id)) || search;
+      nextFocus.focus();
+    };
+    function draw() {
+      var ids = personaStickerIds(personaDraft);
+      count.textContent = '已选 ' + ids.length + ' / 40';
+      selected.textContent = '';
+      ids.forEach(function (id) {
+        var item = picker.items.find(function (row) { return row.id === id; });
+        var label = item && !item.missing ? labelOf(item) : id.slice(0, 12) + '（未找到）';
+        var remove = btn('移除：' + label, 'quiet sm', function () { toggle(id); });
+        remove.setAttribute('aria-label', '移除精选表情：' + label);
+        selected.appendChild(remove);
+      });
+      status.className = 'persona-status' + (picker.error ? ' bad' : '');
+      status.textContent = picker.loading ? '正在读取图库…' : picker.error || (picker.loaded ? '搜索范围：最近最多 500 张图片及已绑定的表情。' : '');
+      retry.disabled = picker.loading;
+      grid.textContent = '';
+      var query = picker.query.trim().toLowerCase();
+      var items = picker.items.filter(function (item) {
+        return !item.missing && item.state !== 'trash' && (!query || [item.id, item.desc || '', (item.tags || []).join(' ')].join(' ').toLowerCase().indexOf(query) >= 0);
+      });
+      if (picker.loaded && items.length === 0) grid.appendChild(el('div', { className: 'hint', text: query ? '没有匹配的表情，换个描述试试。' : '图库里还没有可选择的图片。先到“表情包”整理图片，再重新读取。' }));
+      items.forEach(function (item) {
+        var label = labelOf(item);
+        var chosen = ids.indexOf(item.id) >= 0;
+        var choice = el('button', { type: 'button', id: 'persona-sticker-choice-' + encodeURIComponent(item.id), className: 'persona-sticker-choice', 'aria-pressed': chosen ? 'true' : 'false', 'aria-label': (chosen ? '移除' : '选择') + '表情：' + label, title: label, 'data-sticker-id': item.id }, [
+          el('img', { src: '/dsh-qq/api/stickers/image?id=' + encodeURIComponent(item.id), width: 96, height: 80, alt: label, loading: 'lazy' }),
+          el('span', { className: 'persona-sticker-caption', text: (chosen ? '已选 · ' : '') + label })
+        ]);
+        choice.addEventListener('click', function () { toggle(item.id); });
+        grid.appendChild(choice);
+      });
+    }
+    function readLibrary() {
+      if (picker.loading) return;
+      picker.loading = true;
+      picker.error = '';
+      draw();
+      api('/dsh-qq/api/persona-stickers?ids=' + encodeURIComponent(personaStickerIds(personaDraft).join(','))).then(function (res) {
+        if (!res.data || res.data.ok !== true || !Array.isArray(res.data.items)) throw new Error((res.data && res.data.error) || '图库读取失败，请重试。');
+        picker.items = res.data.items;
+        picker.loaded = true;
+      }).catch(function (error) { picker.error = String(error.message || error); }).finally(function () {
+        picker.loading = false;
+        if (personaStickerState === picker) picker.redraw();
+      });
+    }
+    picker.redraw = draw;
+    search.addEventListener('input', function () { picker.query = search.value; draw(); });
+    draw();
+    if (!picker.loaded && !picker.loading) readLibrary();
+    return box;
+  }
+
+  function personaEffectiveDetails(effective, model) {
+    var box = el('div');
+    var sources = { draft: '未保存草稿', persona: '指定人设', binding: '对话绑定', defaultPersona: '默认人设', chat: '对话旧提示词', default: '旧默认提示词', none: '未设置人设' };
+    box.appendChild(el('p', { text: (effective.mode === 'work' ? '工作模式' : '聊天模式') + ' · ' + (sources[effective.source] || effective.source || '人设') + (effective.personaName ? ' · ' + effective.personaName : '') }));
+    box.appendChild(el('pre', { text: effective.text || '没有额外人设文本。' }));
+    if (effective.chatNote) box.appendChild(el('details', {}, [el('summary', { text: '查看聊天规则' }), el('pre', { text: effective.chatNote })]));
+    box.appendChild(el('p', { text: '精选表情：' + (effective.stickerCount ?? personaStickerIds(effective).length) + ' 张' }));
+    var unavailable = (Array.isArray(effective.stickers) ? effective.stickers : []).filter(function (item) { return item.available === false; });
+    if (unavailable.length) box.appendChild(el('p', { className: 'hint', text: '暂不可用：' + unavailable.map(function (item) { return (item.desc || item.id.slice(0, 12)) + '（' + (item.reason || '当前不可发送') + '）'; }).join('；') }));
+    if (model && model.model) box.appendChild(el('p', { className: 'hint', text: '模型：' + (model.provider ? model.provider + ' / ' : '') + model.model }));
+    box.appendChild(el('p', { className: 'hint', text: effective.notice || '仅预览 QQ 插件的人设与聊天规则，不包含真实群历史或宿主其它提示。' }));
+    return box;
+  }
+
+  function renderPersonaPreview(host, entry) {
+    host.textContent = '';
+    host.hidden = !entry;
+    if (!entry) return;
+    host.appendChild(el('div', { className: 'persona-status' + (entry.error ? ' bad' : ''), role: 'status', 'aria-live': 'polite', text: entry.loading ? '正在读取生效人设…' : entry.error || 'QQ 插件人设预览' }));
+    if (entry.effective) host.appendChild(personaEffectiveDetails(entry.effective, entry.model));
+    host.appendChild(btn('收起预览', 'quiet sm', function () { delete personaPreviews[entry.chatKey]; host.hidden = true; }));
+  }
+
+  function showPersonaPreview(chatKey, mode) {
+    var entry = { chatKey: chatKey, mode: mode, loading: true, error: '', effective: null, model: null };
+    personaPreviews[chatKey] = entry;
+    var update = function () {
+      var host = document.getElementById('persona-effective-' + encodeURIComponent(chatKey));
+      if (host && personaPreviews[chatKey] === entry) renderPersonaPreview(host, entry);
+    };
+    update();
+    return api('/dsh-qq/api/persona-preview', { chatKey: chatKey, mode: mode }).then(function (res) {
+      if (!res.data || res.data.ok !== true || !res.data.effective) throw new Error((res.data && res.data.error) || '生效人设读取失败，请重试。');
+      entry.effective = res.data.effective;
+      entry.model = res.data.model;
+    }).catch(function (error) { entry.error = String(error.message || error); }).finally(function () { entry.loading = false; update(); });
+  }
+
+  function personaTrialPanel() {
+    var trial = personaTrial || (personaTrial = { history: [], input: '', draftKey: '', busy: false, error: '', effective: null, model: null });
+    var box = el('section', { className: 'persona-section persona-trial', 'aria-label': '隔离试聊' });
+    box.appendChild(el('h3', { text: '隔离试聊' }));
+    box.appendChild(el('p', { className: 'hint', text: '使用未保存的人设试聊文字口吻；精选表情在真实聊天中优先使用，这里不模拟选图或发图。试聊不保存、不绑定会话、不发到 QQ，也不加载真实群历史；会调用模型并产生用量。' }));
+    var log = el('div', { className: 'persona-trial-log', id: 'persona-trial-log', role: 'log', 'aria-live': 'polite' });
+    var input = el('textarea', { id: 'persona-trial-message', name: 'persona-trial-message', 'aria-label': '试聊消息', maxlength: 1000, rows: 2, placeholder: '试着和这个人设聊一句…' });
+    input.value = trial.input;
+    var status = el('div', { className: 'persona-status', id: 'persona-trial-status', role: 'status', 'aria-live': 'polite' });
+    var details = el('div');
+    var send = btn('试聊', 'sm', function () {
+      if (trial.busy) return;
+      var message = input.value.trim();
+      if (!message || message.length > 1000) { trial.error = '请输入 1–1000 字的试聊消息。'; refresh(); input.focus(); return; }
+      var draft = { id: personaDraft.id, name: personaDraft.name, text: personaDraft.text, stickerIds: personaStickerIds(personaDraft) };
+      if (!String(draft.text || '').trim()) { trial.error = '先填写人设内容，再试聊。'; refresh(); return; }
+      var key = JSON.stringify(draft);
+      if (key !== trial.draftKey) trial.history = [];
+      trial.draftKey = key;
+      var history = trial.history.slice(-12).map(function (item) { return { role: item.role, content: item.content.slice(0, 1000) }; });
+      trial.busy = true;
+      trial.error = '';
+      refresh();
+      api('/dsh-qq/api/persona-preview', { mode: 'chat', draft: draft, message: message, history: history }).then(function (res) {
+        if (!res.data || res.data.ok !== true || typeof res.data.reply !== 'string') throw new Error((res.data && res.data.error) || '试聊未返回回复，请重试。');
+        trial.history = history.concat([{ role: 'user', content: message }, { role: 'assistant', content: res.data.reply }]).slice(-12);
+        trial.effective = res.data.effective;
+        trial.model = res.data.model;
+        trial.input = '';
+      }).catch(function (error) { trial.error = String(error.message || error); }).finally(function () {
+        trial.busy = false;
+        if (personaTrial === trial) trial.redraw();
+      });
+    });
+    var clear = btn('清空试聊', 'quiet sm', function () { trial.history = []; trial.error = ''; trial.effective = null; trial.model = null; refresh(); });
+    function refresh() {
+      log.textContent = '';
+      trial.history.forEach(function (item) {
+        log.appendChild(el('div', { className: 'persona-trial-message' }, [el('strong', { text: item.role === 'user' ? '你' : '试聊回复' }), el('span', { text: item.content })]));
+      });
+      send.disabled = trial.busy;
+      clear.disabled = trial.busy;
+      input.disabled = trial.busy;
+      input.value = trial.input;
+      send.textContent = trial.busy ? '试聊中…' : '试聊';
+      box.setAttribute('aria-busy', trial.busy ? 'true' : 'false');
+      status.className = 'persona-status' + (trial.error ? ' bad' : '');
+      status.textContent = trial.busy ? '正在生成回复…' : trial.error || (trial.history.length ? '按发送时的草稿生成；修改人设后再次试聊会开始新对话。' : '最多保留最近 6 轮试聊，仅在本次编辑中可见。');
+      details.textContent = '';
+      if (trial.effective) details.appendChild(el('details', { className: 'persona-effective' }, [el('summary', { text: '查看本次人设与聊天规则' }), personaEffectiveDetails(trial.effective, trial.model)]));
+    }
+    trial.redraw = refresh;
+    input.addEventListener('input', function () { trial.input = input.value; });
+    box.appendChild(log);
+    box.appendChild(input);
+    box.appendChild(el('div', { className: 'actions' }, [send, clear]));
+    box.appendChild(status);
+    box.appendChild(details);
+    refresh();
+    return box;
   }
 
   function personaEditor() {
@@ -1297,16 +1524,19 @@
     var idInput = el('input', {
       type: 'text',
       id: 'persona-id',
+      name: 'persona-id',
       'aria-label': '人设 id',
+      autocomplete: 'off',
+      spellcheck: 'false',
       placeholder: 'id：小写字母/数字/下划线/短横线，例如 tech',
       value: editingExisting ? editingId : (draft.id || '')
     });
     if (editingExisting) idInput.disabled = true;
-    var nameInput = el('input', { type: 'text', id: 'persona-name', 'aria-label': '人设名称', placeholder: '名称，例如 技术顾问', value: draft.name || '' });
-    var textarea = el('textarea', { id: 'persona-text', 'aria-label': '人设内容', placeholder: '人设文本（最多 4000 字）' });
+    var nameInput = el('input', { type: 'text', id: 'persona-name', name: 'persona-name', 'aria-label': '人设名称', autocomplete: 'off', placeholder: '名称，例如 技术顾问', value: draft.name || '' });
+    var textarea = el('textarea', { id: 'persona-text', name: 'persona-text', 'aria-label': '人设内容', placeholder: '人设文本（最多 4000 字）' });
     textarea.value = draft.text || '';
     var rememberDraft = function () {
-      personaDraft = { id: editingExisting ? editingId : idInput.value, name: nameInput.value, text: textarea.value };
+      personaDraft = { id: editingExisting ? editingId : idInput.value, name: nameInput.value, text: textarea.value, stickerIds: personaStickerIds(personaDraft) };
     };
     idInput.addEventListener('input', rememberDraft);
     nameInput.addEventListener('input', rememberDraft);
@@ -1315,8 +1545,10 @@
     var refresh = function () { count.textContent = textarea.value.length + ' / ' + (S.promptLimit || 4000) + ' 字'; };
     textarea.addEventListener('input', refresh);
     refresh();
-    box.appendChild(el('div', { style: 'display:grid;grid-template-columns:160px 1fr;gap:10px' }, [idInput, nameInput]));
+    box.appendChild(el('div', { className: 'persona-fields' }, [idInput, nameInput]));
     box.appendChild(textarea);
+    box.appendChild(personaStickerPicker());
+    box.appendChild(personaTrialPanel());
     var actions = el('div', { className: 'row' }, [
       count,
       el('div', { className: 'hint', text: '保存后下一回合生效；绑定到对话会覆盖该对话的旧提示词。' }),
@@ -1325,7 +1557,8 @@
           action: 'save',
           id: editingExisting ? editingId : idInput.value.trim(),
           name: nameInput.value.trim(),
-          text: textarea.value
+          text: textarea.value,
+          stickerIds: personaStickerIds(personaDraft)
         }, '人设已保存').then(function (ok) {
           if (ok) { personaEditing = ''; personaDraft = null; renderPrompts(); }
         });
@@ -1494,9 +1727,14 @@
           workSelect,
           chatSelect,
           (boundWork !== '' || boundChat !== '') ? pill('人设', 'ok', false) : pill(own === '' ? '跟随默认' : '旧提示词', own === '' ? 'neutral' : 'warn', false),
+          btn('生效预览', 'quiet sm', function () { showPersonaPreview(key, modeSelect.value); }),
           btn('编辑旧提示词', 'sm', function () { promptEditing = key; renderPrompts(); }),
           own === '' ? null : btn('清除', 'quiet sm', function () { savePrompt(key, ''); })
         ]));
+        var previewHost = el('div', { id: 'persona-effective-' + encodeURIComponent(key), className: 'persona-effective', hidden: true });
+        if (personaPreviews[key] && personaPreviews[key].mode !== currentMode) delete personaPreviews[key];
+        renderPersonaPreview(previewHost, personaPreviews[key]);
+        list.appendChild(previewHost);
         if (promptEditing === key) list.appendChild(promptEditor(key, own));
       });
     }

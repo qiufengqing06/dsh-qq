@@ -86,6 +86,24 @@ test('参与判断：wake=true 才进 bridge，命令仍不参与', async () => 
   assert.deepEqual(await router.routeInbound(command), { handled: 'ignored', reason: 'not-mentioned' })
 })
 
+test('短补充准入：不重复要求@，仍检查聊天授权且不放开命令', async () => {
+  const env = await setup({ pairingPolicy: 'allowlist' })
+  const chatKey = 'mock:mock:group:g1'
+  await env.store.setMode(chatKey, 'chat')
+  const delivered = []
+  const router = createRouter({ ...env, bridge: {
+    acceptsChatSupplement: () => true,
+    handleUserMessage: async ev => { delivered.push(ev); return { accepted: true } },
+  } })
+  const ev = env.transport.inject({ target: { kind: 'group', groupId: 'g1' }, sender: { id: 'owner-1' }, text: '补一句', mentioned: false })
+  assert.equal((await router.routeInbound(ev)).handled, 'message')
+  assert.equal(delivered.length, 1)
+  assert.equal((await router.routeInbound({ ...ev, text: '/qq-status' })).reason, 'not-mentioned')
+  const denied = await router.routeInbound({ ...ev, sender: { id: 'stranger' } })
+  assert.notEqual(denied.handled, 'message')
+  assert.equal(delivered.length, 1)
+})
+
 test('免@群：block筛选聊天消息，log/off与work保留旧行为；命令不参与评分', async () => {
   for (const mode of ['block', 'log', 'off']) {
     const env = await setup({ freeReplyGroups: ['g1'], participation: { enabled: true, mode, quietHours: '00:00-00:00' } })

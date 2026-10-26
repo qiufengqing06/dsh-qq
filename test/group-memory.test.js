@@ -36,6 +36,22 @@ const groupEvent = (text, { chatKey = GROUP, userId = '40004', name = '小明', 
   timestamp: at,
 })
 
+test('合并输入不重复进入环境上下文，后到消息仍留给下一批', async () => {
+  const { memory } = await setup()
+  const key = 'qqbot:1:group:g'
+  for (const [messageId, text] of [['old', '之前的话题'], ['a', '多少钱'], ['b', '给你条鱼'], ['late', '后来的补充']]) {
+    memory.observe({ ...groupEvent(text, { chatKey: key }), messageId }, 'chat')
+  }
+  const first = memory.pendingContext(key, 'chat', { excludeMessageIds: ['a', 'b'] })
+  assert.match(first.text, /之前的话题/)
+  assert.doesNotMatch(first.text, /多少钱|给你条鱼|后来的补充/)
+  assert.equal(first.omitted, 0)
+  const next = memory.pendingContext(key, 'chat')
+  assert.equal(next.count, 1)
+  assert.match(next.text, /后来的补充/)
+  assert.equal(memory.pendingContext(key, 'chat').count, 0)
+})
+
 test('环境缓冲：群消息进缓冲，私聊不进；超出上限滚动丢弃最旧', async () => {
   const { memory } = await setup({ groupMemory: { bufferMessages: 3 } })
   assert.equal(memory.observe(groupEvent('一')), true)

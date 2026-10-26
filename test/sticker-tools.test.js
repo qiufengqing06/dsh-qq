@@ -14,7 +14,7 @@ test('list_stickers 的实际模型渲染含完整描述、用途与可用原因
       list: (key, options) => {
         listed = { key, options }
         return [
-          { id: 'available-id', state: 'library', tags: ['调侃'], desc, sourceText: '白饭梗', available: true, reason: '' },
+          { id: 'available-id', state: 'library', tags: ['调侃'], desc, sourceText: '白饭梗', preferred: true, available: true, reason: '' },
           { id: 'used-id', state: 'candidate', tags: ['得意'], desc: '托腮笑', sourceText: '', available: false, reason: '这张图最近发过，换一张' },
         ]
       },
@@ -30,6 +30,8 @@ test('list_stickers 的实际模型渲染含完整描述、用途与可用原因
   assert.ok(rendered.includes(desc), 'render 不能只输出标签而丢掉视觉描述')
   assert.match(rendered, /可发送/)
   assert.match(rendered, /用途标签：调侃/)
+  assert.match(rendered, /available-id · 收藏 · 人设精选 · 可发送/)
+  assert.doesNotMatch(rendered.split('\n').find(line => line.includes('used-id')), /人设精选/)
   assert.match(rendered, /暂不可发：这张图最近发过/)
 })
 

@@ -10,10 +10,10 @@ import { createStickerTools } from '../lib/sticker-tools.js'
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 1)])
 
-async function setup({ stickers = {}, groupId = '100', clock = () => Date.now() } = {}) {
+async function setup({ stickers = {}, groupId = '100', clock = () => Date.now(), preferredIdsForChat = () => [] } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-stickers-'))
   const config = resolveConfig({ transport: 'mock', dataDir: dir, autoConnect: false, stickers })
-  const store = createStickerStore({ dir, config, clock })
+  const store = createStickerStore({ dir, config, clock, preferredIdsForChat })
   await store.load()
   const sent = []
   const transport = {
@@ -182,6 +182,66 @@ test('先排除重复再选图；英文标签兼容中文，同轮两张与轮�
   now += 1001
   assert.equal((await env.store.send(sendOptions(env, { id: remaining, turnId: 'turn-2' }))).ok, true)
   assert.match((await env.store.send(sendOptions(env, { id: a.id, turnId: 'turn-2' }))).error, /最近发过/)
+})
+
+test('人设精选优先匹配，但不适合或已发过时回退普通图库', async () => {
+  let selected = []
+  const env = await setup({ preferredIdsForChat: () => selected, stickers: { send: { perTurnMax: 5, cooldownMs: 0 } } })
+  const regular = await addSticker(env, 1)
+  await env.store.promote(regular.id)
+  const preferred = await addSticker(env, 2)
+  const otherUse = await addSticker(env, 3, ['拒绝'])
+  selected = [preferred.id]
+  const listed = env.store.list(env.ev.chatKey, { query: '开心' })
+  assert.equal(listed[0].id, preferred.id, '匹配的精选候选排在普通收藏之前')
+  assert.equal(listed[0].preferred, true)
+  assert.equal(listed.find(item => item.id === regular.id).preferred, false)
+  assert.equal((await env.store.send(sendOptions(env, { query: '拒绝', turnId: 't' }))).id, otherUse.id, '精选不匹配时允许普通候选')
+  assert.equal((await env.store.send(sendOptions(env, { tag: 'happy', turnId: 't' }))).id, preferred.id)
+  const after = env.store.list(env.ev.chatKey, { query: '开心', turnId: 't' })
+  assert.equal(after[0].id, regular.id, '可发送普通图排在重复精选之前')
+  assert.equal(after.at(-1).preferred, true)
+  assert.match(after.at(-1).reason, /最近发过/)
+  assert.equal((await env.store.send(sendOptions(env, { tag: '开心', turnId: 't' }))).id, regular.id)
+  selected = [otherUse.id]
+  assert.equal(env.store.list(env.ev.chatKey, { ids: [preferred.id] })[0].preferred, false, '人设选择变化即时生效')
+  assert.deepEqual(selected, [otherUse.id], '选图不修改全局人设数组')
+})
+
+test('精选候选可用于默认选图，显式 id 仍可选择非精选', async () => {
+  let selected = []
+  const env = await setup({ preferredIdsForChat: () => selected, stickers: { send: { cooldownMs: 0 } } })
+  const preferred = await addSticker(env, 1)
+  const other = await addSticker(env, 2)
+  selected = [preferred.id]
+  assert.equal((await env.store.send(sendOptions(env, { id: other.id, turnId: 't' }))).id, other.id)
+  assert.equal((await env.store.send(sendOptions(env, { turnId: 't' }))).id, preferred.id)
+})
+
+test('精选不突破私聊/群来源与回收限制，预览按指定 ID 先筛选再限制数量', async () => {
+  let now = Date.now()
+  let selected = []
+  const env = await setup({ groupId: '200', clock: () => now, preferredIdsForChat: () => selected,
+    stickers: { noShareGroups: ['100'], send: { cooldownMs: 0 } } })
+  const regular = await addSticker(env, 1)
+  now += 1000
+  const newer = await addSticker(env, 2)
+  const privateImage = await addSticker({ ...env, ev: { ...env.ev, chatKey: 'qqbot:1:dm:u', target: { kind: 'dm', userId: 'u' } } }, 3)
+  const localImage = await addSticker({ ...env, ev: { ...env.ev, chatKey: 'qqbot:1:group:100', target: { kind: 'group', groupId: '100' } } }, 4)
+  const trashed = await addSticker(env, 5)
+  await env.store.trash(trashed.id)
+  selected = [privateImage.id, localImage.id, trashed.id]
+  const listed = env.store.list(env.ev.chatKey, { limit: 1 })
+  assert.equal(listed[0].id, newer.id)
+  const preview = env.store.list(env.ev.chatKey, { ids: [regular.id, ...selected], limit: 1 })
+  assert.deepEqual(preview.map(item => item.id), [regular.id], '先按 ID 筛选，且不返回不可见图片描述')
+  assert.deepEqual(env.store.list(env.ev.chatKey, { ids: selected }), [])
+  assert.deepEqual(env.store.list(env.ev.chatKey, { ids: [] }), [])
+  assert.equal(env.store.list('qqbot:1:dm:u', { ids: [privateImage.id] })[0].preferred, true)
+  assert.match((await env.store.send(sendOptions(env, { id: privateImage.id, turnId: 't' }))).error, /不属于当前对话/)
+  assert.match((await env.store.send(sendOptions(env, { id: trashed.id, turnId: 't' }))).error, /回收站/)
+  assert.equal((await env.store.send(sendOptions(env, { tag: '开心', turnId: 't' }))).id, newer.id, '不可见精选不阻挡普通库回退')
+  assert.deepEqual(selected, [privateImage.id, localImage.id, trashed.id], '不因当前对话不可见而删除全局选择')
 })
 
 test('同对话并发发送串行复查每轮与日额度，不让两个工具同时抢到额度', async () => {

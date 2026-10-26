@@ -9,10 +9,31 @@ import { createStore } from '../lib/store.js'
 import { createMockTransport } from '../lib/mock.js'
 import { createGroupMemory } from '../lib/group-memory.js'
 import { createResourceScope } from '../lib/scope.js'
-import { clipChatReply, createBridge, dshUiFencesToText, extractAssistantText, extractTurnError, lastEventSeq, splitChatReply, stripDshUiFences, toPlainText } from '../lib/bridge.js'
+import { CHAT_INPUT_WINDOW_MS, clipChatReply, createBridge, dshUiFencesToText, extractAssistantText, extractTurnError, lastEventSeq, splitChatReply, stripDshUiFences, toPlainText } from '../lib/bridge.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
 const tick = (ms = 15) => new Promise(resolve => setTimeout(resolve, ms))
+
+function chatClock() {
+  let now = 10_000
+  const waits = new Set()
+  const sleeps = []
+  return {
+    clock: () => now,
+    sleeps,
+    sleep(ms) {
+      sleeps.push(ms)
+      return new Promise(resolve => { waits.add({ at: now + ms, resolve }) })
+    },
+    async advance(ms) {
+      now += ms
+      for (const wait of [...waits]) {
+        if (wait.at <= now) { waits.delete(wait); wait.resolve() }
+      }
+      await tick()
+    },
+  }
+}
 
 async function setup(overrides = {}, serviceOverrides = {}, transportOptions = {}, bridgeOptions = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-bridge-'))
@@ -23,7 +44,7 @@ async function setup(overrides = {}, serviceOverrides = {}, transportOptions = {
   const agents = createFakeAgents()
   const ctx = createFakeCtx({ services: { agents, ...serviceOverrides } })
   const scope = createResourceScope({ name: 'test' })
-  const bridge = createBridge({ ctx, config, store, transport, scope, logger: createLogger(), ...bridgeOptions })
+  const bridge = createBridge({ ctx, config, store, transport, scope, logger: createLogger(), chatInputWindowMs: 0, sleep: async () => {}, ...bridgeOptions })
   return { dir, config, store, transport, agents, ctx, scope, bridge }
 }
 
@@ -1287,7 +1308,7 @@ test('聊天模式：回复拆成多条，工作模式仍整段发送', async ()
   await tick(30)
   const texts = transport.dump().filter(entry => entry.kind === 'text')
   assert.ok(texts.length >= 2, '聊天模式应拆成多条发送')
-  assert.equal(sleeps.includes(250), true, '首条前应有短暂 typing 停顿')
+  assert.equal(sleeps.some(ms => ms >= 900 && ms <= 1000), true, '首条前应等待自然反应时间')
   assert.equal(sleeps.some(ms => ms >= 600 && ms <= 1800), true, '条间延迟应在配置范围内')
 
   const second = await setup()
@@ -1486,6 +1507,8 @@ test('有序回复：停机或切人设期间取消后续图，返回实际发�
     const agent = env.agents.live.get(env.agents.created[0].sessionId)
     const pending = env.bridge.dispatchReply([{ type: 'sticker', id: 'a' }, { type: 'sticker', id: 'b' }], { agent })
     await tick()
+    unblock() // 首张图也有自然反应时间；等它发出后再取消第二张。
+    await tick()
     if (kind === 'stop') await env.bridge.stop(ev.chatKey)
     else await env.store.setPersona('changed', { name: 'changed', text: '换个说话方式' })
     unblock()
@@ -1535,13 +1558,14 @@ test('有序回复：失败不冒充成功，部分成功后不重发最终文�
 test('真实会话事件：使用已消费的发言人，尚未消费的排队消息不抢引用', async () => {
   const receipts = []
   const env = await setup({ midTurnDelivery: 'queue' }, {}, {}, { sleep: async () => {}, onReply: x => receipts.push(x) })
-  const first = env.transport.injectText('第一句', { messageId: 'm1', sender: { id: 'u1' } })
+  const target = { kind: 'group', groupId: 'g1' }
+  const first = env.transport.injectText('第一句', { messageId: 'm1', target, sender: { id: 'u1' }, mentioned: true })
   await env.store.setMode(first.chatKey, 'chat')
   await env.bridge.handleUserMessage(first)
   const agent = env.agents.live.get(env.agents.created[0].sessionId)
   agent.session.append('turn/start', { turn: 1 })
   agent.session.append('user/message', agent.followed[0])
-  await env.bridge.handleUserMessage(env.transport.injectText('第二句', { messageId: 'm2', sender: { id: 'u2' } }))
+  await env.bridge.handleUserMessage(env.transport.injectText('第二句', { messageId: 'm2', target, sender: { id: 'u2' }, mentioned: true }))
   const result = await env.bridge.dispatchReply([{ type: 'text', text: '接第一句', replyToMessageId: 'm1' }], { agent })
   assert.equal(result.ok, true)
   assert.equal(receipts[0].senderId, 'u1')
@@ -1549,13 +1573,14 @@ test('真实会话事件：使用已消费的发言人，尚未消费的排队�
   env.scope.dispose()
 })
 
-test('真实连续回合：没有中间 idle 也保留每一轮文字，最终 idle 不重复', async () => {
+test('真实连续回合：独立群友的问题没有中间 idle 也保留各轮文字，最终 idle 不重复', async () => {
   const env = await setup({ midTurnDelivery: 'queue' }, {}, {}, { sleep: async () => {} })
-  const first = env.transport.injectText('第一问', { messageId: 'q1' })
+  const target = { kind: 'group', groupId: 'g1' }
+  const first = env.transport.injectText('第一问', { messageId: 'q1', target, sender: { id: 'u1' }, mentioned: true })
   await env.store.setMode(first.chatKey, 'chat')
   await env.bridge.handleUserMessage(first)
   const agent = env.agents.live.get(env.agents.created[0].sessionId)
-  await env.bridge.handleUserMessage(env.transport.injectText('第二问', { messageId: 'q2' }))
+  await env.bridge.handleUserMessage(env.transport.injectText('第二问', { messageId: 'q2', target, sender: { id: 'u2' }, mentioned: true }))
   agent.session.append('turn/start', { turn: 1 })
   agent.session.append('user/message', agent.followed[0])
   agent.reply('第一答').endTurn()
@@ -1626,4 +1651,356 @@ test('聊天默认不引用：私聊/群聊的普通回复与工具气泡都直�
       } finally { await env.scope.dispose() }
     }
   }
+})
+
+
+test('聊天收拢：立即确认入队，固定窗口保留不同身份、消息 ID、引用和媒体', async () => {
+  const time = chatClock()
+  const contexts = []
+  const receipts = []
+  const attachments = createFakeAttachments()
+  const env = await setup({ maxMediaPerMessage: 1 }, { attachments }, { capabilities: { typing: false } }, {
+    ...time, chatInputWindowMs: CHAT_INPUT_WINDOW_MS, random: () => 0,
+    ambientContext: async (ev, options) => { contexts.push(options); return { recent: '之前的话' } },
+    onReply: event => receipts.push(event),
+  })
+  try {
+    const target = { kind: 'group', groupId: 'g1' }
+    env.transport.addMedia('https://cdn.invalid/fish.png', { data: Buffer.from('PNG'), contentType: 'image/png' })
+    const first = env.transport.injectText('摸头多少钱', { target, messageId: 'q1', sender: { id: 'u1', name: '甲' }, mentioned: true })
+    await env.store.setMode(first.chatKey, 'chat')
+    assert.deepEqual(await env.bridge.handleUserMessage(first), { accepted: true, queued: true })
+    assert.equal(env.agents.created.length, 0, '调用方不等待收拢窗口或建会话')
+    assert.equal(env.bridge.isBusy(first.chatKey), true)
+    await time.advance(200)
+    const second = env.transport.inject({ text: '给你条鱼', target, messageId: 'q2', sender: { id: 'u2', name: '乙' },
+      replyTo: { messageId: 'q1', text: first.text, sender: first.sender },
+      media: [{ kind: 'image', url: 'https://cdn.invalid/fish.png', mime: 'image/png' }, { kind: 'image', url: 'https://cdn.invalid/unused.png' }] })
+    assert.equal((await env.bridge.handleUserMessage(second)).accepted, true)
+    await time.advance(399)
+    assert.equal(env.agents.created.length, 0)
+    await time.advance(1)
+    const agent = env.agents.live.get(env.agents.created[0].sessionId)
+    assert.equal(agent.followed.length, 1, '固定在首条后 600ms 投递，不被补充无限续期')
+    assert.equal(agent.steered.length, 0)
+    const blocks = agent.followed[0].content
+    const text = blocks.filter(x => x.type === 'text').map(x => x.text).join('\n')
+    assert.match(text, /连续消息 1\/2.*甲\|u1/)
+    assert.match(text, /连续消息 2\/2.*乙\|u2/)
+    assert.match(text, /当前消息 ID: q1/)
+    assert.match(text, /当前消息 ID: q2/)
+    assert.match(text, /引用消息.*消息 ID: q1.*甲\|u1/)
+    assert.match(text, /已忽略 1 个附件/)
+    assert.equal(blocks.filter(x => x.type === 'image').length, 1)
+    assert.deepEqual(contexts, [{ excludeMessageIds: ['q1', 'q2'] }])
+    agent.reply('成交，鱼先交出来').ctx.emitStatus('idle')
+    await tick()
+    assert.equal(env.transport.lastText(), null)
+    assert.equal(env.bridge.isBusy(first.chatKey), true, '已生成但等待首发也算忙')
+    await time.advance(399)
+    assert.equal(env.transport.lastText(), null)
+    await time.advance(1)
+    assert.equal(env.transport.lastText(), '成交，鱼先交出来')
+    assert.equal(receipts[0].senderId, 'u2', '保留实际最后发言人')
+    assert.equal(receipts[0].explicit, true, '首条明确 @ 的事实不因末条没有 @ 而丢失')
+  } finally { await env.scope.dispose() }
+})
+
+test('聊天首发：普通单句与工具首张图均等待 1–3 秒，慢生成不重复等待', async () => {
+  for (const [random, elapsed, tool] of [[0, 0, false], [1, 0, true], [1, 4000, true]]) {
+    const time = chatClock()
+    const images = []
+    const env = await setup({}, {}, { capabilities: { typing: false } }, {
+      ...time, random: () => random, sendSticker: async ({ id }) => { images.push(id); return { ok: true, id } },
+    })
+    try {
+      const ev = env.transport.injectText('你好')
+      await env.store.setMode(ev.chatKey, 'chat')
+      await env.bridge.handleUserMessage(ev)
+      const agent = env.agents.live.get(env.agents.created[0].sessionId)
+      await time.advance(elapsed)
+      let reply
+      if (tool) reply = env.bridge.dispatchReply([{ type: 'sticker', id: 'fish' }], { agent })
+      else agent.reply('来了').ctx.emitStatus('idle')
+      await tick()
+      const outputCount = () => images.length + env.transport.dump().filter(x => x.kind === 'text').length
+      const remaining = Math.max(0, (random ? 3000 : 1000) - elapsed)
+      if (remaining) {
+        assert.equal(outputCount(), 0)
+        assert.deepEqual(time.sleeps, [remaining])
+        await time.advance(remaining - 1)
+        assert.equal(outputCount(), 0)
+        await time.advance(1)
+      } else assert.deepEqual(time.sleeps, [], '生成已经较慢，无额外首发睡眠')
+      if (reply) assert.equal((await reply).ok, true)
+      assert.equal(outputCount(), 1)
+    } finally { await env.scope.dispose() }
+  }
+})
+
+test('聊天等待取消：停止/切模式/切人设/卸载均取消尚未投递的批次', async () => {
+  for (const change of ['stop', 'mode', 'persona', 'dispose']) {
+    const time = chatClock()
+    const env = await setup({}, {}, {}, { ...time, chatInputWindowMs: CHAT_INPUT_WINDOW_MS })
+    const ev = env.transport.injectText('先等我说完')
+    await env.store.setMode(ev.chatKey, 'chat')
+    await env.bridge.handleUserMessage(ev)
+    if (change === 'stop') assert.equal(await env.bridge.stop(ev.chatKey), true)
+    if (change === 'mode') { await env.store.setMode(ev.chatKey, 'work'); await env.bridge.activateMode(ev.chatKey, 'work') }
+    if (change === 'persona') await env.store.setChatPrompt(ev.chatKey, '换个人设', 'chat')
+    if (change === 'dispose') await env.scope.dispose()
+    await time.advance(600)
+    assert.equal(env.agents.created.length, 0, change)
+    assert.equal(env.transport.dump().filter(x => x.kind === 'text').length, 0, change)
+    assert.equal(env.bridge.isBusy(ev.chatKey), false, change)
+    await env.scope.dispose()
+  }
+})
+
+test('聊天缓冲有界：队列计入配额、异步建会话失败有反馈，工作模式不等窗口', async () => {
+  const time = chatClock()
+  const env = await setup({ maxQueuedMessagesPerChat: 2 }, {}, {}, { ...time, chatInputWindowMs: CHAT_INPUT_WINDOW_MS })
+  try {
+    const ev = env.transport.injectText('第一条')
+    await env.store.setMode(ev.chatKey, 'chat')
+    await env.bridge.handleUserMessage(ev)
+    await env.bridge.handleUserMessage(env.transport.injectText('第二条'))
+    assert.equal((await env.bridge.handleUserMessage(env.transport.injectText('第三条'))).reason, 'over-queue')
+    assert.equal(env.bridge.status().pending, 2)
+    env.agents.failed.create = 'fake unavailable'
+    await time.advance(600)
+    assert.match(env.transport.lastText(), /DSH 会话创建失败/)
+    assert.equal(env.bridge.isBusy(ev.chatKey), false)
+    assert.equal(env.bridge.status().pending, 0)
+    env.agents.failed.create = null
+    await env.store.setMode(ev.chatKey, 'work')
+    assert.equal((await env.bridge.handleUserMessage(env.transport.injectText('立即工作'))).accepted, true)
+    assert.equal(env.agents.live.get(env.agents.created[0].sessionId).followed.length, 1)
+    assert.deepEqual(time.sleeps, [600])
+  } finally { await env.scope.dispose() }
+})
+
+test('新补充取消旧草稿：补充仍送入 steer，消费后可发送新回复而非永久静默', async () => {
+  const time = chatClock()
+  const env = await setup({}, {}, { capabilities: { typing: false } }, { ...time, random: () => 0 })
+  try {
+    const first = env.transport.injectText('摸头多少钱', { messageId: 'q1' })
+    await env.store.setMode(first.chatKey, 'chat')
+    await env.bridge.handleUserMessage(first)
+    const agent = env.agents.live.get(env.agents.created[0].sessionId)
+    agent.session.append('turn/start', { turn: 1 })
+    agent.session.append('user/message', agent.followed[0])
+    const old = env.bridge.dispatchReply([{ type: 'text', text: '十块' }], { agent })
+    await tick()
+    await time.advance(100)
+    await env.bridge.handleUserMessage(env.transport.injectText('算了，给你条鱼', { messageId: 'q2' }))
+    assert.equal(agent.steered.length, 1)
+    await time.advance(900)
+    assert.match((await old).message, /相关补充/)
+    assert.equal(env.transport.lastText(), null)
+    agent.session.append('user/message', agent.steered[0])
+    const fresh = env.bridge.dispatchReply([{ type: 'text', text: '成交，鱼先交出来' }], { agent })
+    await tick()
+    await time.advance(100)
+    assert.equal((await fresh).ok, true)
+    assert.deepEqual(env.transport.dump().filter(x => x.kind === 'text').map(x => x.text), ['成交，鱼先交出来'])
+  } finally { await env.scope.dispose() }
+})
+
+test('工具答完后又消费补充：同一宿主回合开启新的回复配额，不吞掉最终文字', async () => {
+  const time = chatClock()
+  const env = await setup({}, {}, { capabilities: { typing: false } }, { ...time, random: () => 0 })
+  try {
+    const first = env.transport.injectText('摸头多少钱', { messageId: 'q1' })
+    await env.store.setMode(first.chatKey, 'chat')
+    await env.bridge.handleUserMessage(first)
+    const agent = env.agents.live.get(env.agents.created[0].sessionId)
+    agent.session.append('turn/start', { turn: 1 })
+    agent.session.append('user/message', agent.followed[0])
+    const firstTurn = env.bridge.turnIdForSession(agent.session.id)
+    const sent = env.bridge.dispatchReply([{ type: 'text', text: '十块' }], { agent })
+    await tick()
+    await time.advance(1000)
+    assert.equal((await sent).ok, true)
+    await env.bridge.handleUserMessage(env.transport.injectText('给你条鱼', { messageId: 'q2' }))
+    agent.session.append('user/message', agent.steered[0])
+    assert.notEqual(env.bridge.turnIdForSession(agent.session.id), firstTurn)
+    agent.reply('鱼另算').endTurn()
+    await tick()
+    await time.advance(1000)
+    assert.deepEqual(env.transport.dump().filter(x => x.kind === 'text').map(x => x.text), ['十块', '鱼另算'])
+  } finally { await env.scope.dispose() }
+})
+
+test('普通旧草稿也取消；旁观记录、其他群和不同群友的独立发言不会使它失效', async () => {
+  for (const related of [true, false]) {
+    const time = chatClock()
+    const ambient = []
+    const env = await setup({}, {}, { capabilities: { typing: false } }, { ...time, random: () => 0, recentMessages: () => ambient })
+    try {
+      const target = { kind: 'group', groupId: 'g1' }
+      const first = env.transport.injectText('白饭多少钱', { target, sender: { id: 'u1' }, messageId: 'q1', mentioned: true })
+      await env.store.setMode(first.chatKey, 'chat')
+      await env.bridge.handleUserMessage(first)
+      const agent = env.agents.live.get(env.agents.created[0].sessionId)
+      agent.reply('你还想白吃啊').ctx.emitStatus('idle')
+      await tick()
+      ambient.push({ messageId: 'bystander', sender: { id: 'u9' }, text: '旁观消息' })
+      const next = env.transport.injectText('给你条鱼', { target, sender: { id: related ? 'u1' : 'u2' }, messageId: 'q2', mentioned: true })
+      await env.bridge.handleUserMessage(next)
+      await time.advance(1000)
+      assert.equal(env.transport.lastText(), related ? null : '你还想白吃啊')
+      assert.equal(agent.followed.length, 2, '旧输出取消不丢掉后一条已准入消息')
+    } finally { await env.scope.dispose() }
+  }
+})
+
+test('明确 @ 的连续补充准入：固定三秒、同人同群、身份和引用保守判断', async () => {
+  const time = chatClock()
+  const env = await setup({}, {}, {}, { ...time, chatInputWindowMs: CHAT_INPUT_WINDOW_MS })
+  try {
+    const target = { kind: 'group', groupId: 'g1' }
+    const first = env.transport.injectText('听我说', { target, messageId: 'first', sender: { id: 'u1' }, mentioned: true })
+    await env.store.setMode(first.chatKey, 'chat')
+    await env.bridge.handleUserMessage(first)
+    const plain = env.transport.injectText('还有一句', { target, sender: { id: 'u1' } })
+    assert.equal(env.bridge.acceptsChatSupplement(plain), true)
+    assert.equal(env.bridge.acceptsChatSupplement({ ...plain, sender: { id: 'u2' } }), false)
+    assert.equal(env.bridge.acceptsChatSupplement({ ...plain, chatKey: 'mock:other:group:g1' }), false)
+    assert.equal(env.bridge.acceptsChatSupplement({ ...plain, atOthers: ['u2'] }), false)
+    assert.equal(env.bridge.acceptsChatSupplement({ ...plain, replyTo: { messageId: 'x', sender: { id: 'u2' } } }), false)
+    assert.equal(env.bridge.acceptsChatSupplement({ ...plain, replyTo: { messageId: 'unknown' } }), false)
+    assert.equal(env.bridge.acceptsChatSupplement({ ...plain, replyTo: { messageId: 'first' } }), true)
+    await time.advance(600)
+    await time.advance(2000)
+    await env.bridge.handleUserMessage(plain)
+    await time.advance(400)
+    assert.equal(env.bridge.acceptsChatSupplement(plain), true, '恰好三秒仍在窗口')
+    await time.advance(1)
+    assert.equal(env.bridge.acceptsChatSupplement(plain), false, '普通补充没有延长窗口')
+    await env.bridge.stop(first.chatKey)
+    assert.equal(env.bridge.acceptsChatSupplement(plain), false)
+  } finally { await env.scope.dispose() }
+})
+
+
+test('stop --keep 保留尚未投递的聊天批次并迁至新代际，只投递一次', async () => {
+  const time = chatClock()
+  const env = await setup({}, {}, { capabilities: { typing: false } }, { ...time, random: () => 0, chatInputWindowMs: CHAT_INPUT_WINDOW_MS })
+  try {
+    const first = env.transport.injectText('还没说完', { messageId: 'q1' })
+    await env.store.setMode(first.chatKey, 'chat')
+    await env.bridge.handleUserMessage(first)
+    await env.bridge.handleUserMessage(env.transport.injectText('给你条鱼', { messageId: 'q2' }))
+    await time.advance(200)
+    assert.equal(await env.bridge.stop(first.chatKey, { keepQueue: true }), true)
+    assert.equal(env.bridge.status().pending, 2)
+    await time.advance(400)
+    assert.equal(env.agents.created.length, 0, '旧窗口已取消')
+    await time.advance(200)
+    const agent = env.agents.live.get(env.agents.created[0].sessionId)
+    assert.equal(agent.followed.length, 1)
+    const text = agent.followed[0].content.map(x => x.text ?? '').join('\n')
+    assert.match(text, /还没说完/)
+    assert.match(text, /给你条鱼/)
+    agent.reply('鱼先交出来').ctx.emitStatus('idle')
+    await tick()
+    await time.advance(200)
+    assert.equal(env.transport.lastText(), '鱼先交出来', '保留输入的新回复不因旧代际而失效')
+    await time.advance(1000)
+    assert.equal(agent.followed.length, 1)
+    assert.equal(env.transport.dump().filter(x => x.kind === 'text').length, 1)
+  } finally { await env.scope.dispose() }
+})
+
+test('停止发生在媒体准备期间：keep 重投完整原始消息，默认停止不投递', async () => {
+  for (const keepQueue of [false, true]) {
+    const time = chatClock()
+    const attachments = createFakeAttachments()
+    const env = await setup({}, { attachments }, {}, { ...time, random: () => 0, chatInputWindowMs: CHAT_INPUT_WINDOW_MS })
+    let release
+    let downloads = 0
+    env.transport.downloadMedia = async () => {
+      downloads++
+      if (downloads === 1) await new Promise(resolve => { release = resolve })
+      return { ok: true, data: Buffer.from('PNG'), contentType: 'image/png' }
+    }
+    try {
+      const ev = mediaEvent(env.transport, [{ kind: 'image', url: 'https://cdn.invalid/a.png' }], { text: '这条带图' })
+      await env.store.setMode(ev.chatKey, 'chat')
+      await env.bridge.handleUserMessage(ev)
+      await time.advance(600)
+      assert.equal(typeof release, 'function')
+      await env.bridge.stop(ev.chatKey, { keepQueue })
+      release()
+      await tick()
+      const agent = env.agents.live.get(env.agents.created[0].sessionId)
+      assert.equal(agent.followed.length, 0, '旧媒体准备完成后也不能投递旧代际')
+      await time.advance(600)
+      assert.equal(agent.followed.length, keepQueue ? 1 : 0)
+      if (keepQueue) assert.equal(agent.followed[0].content.filter(x => x.type === 'image').length, 1)
+    } finally { await env.scope.dispose() }
+  }
+})
+
+test('不同群友明确引用当前讨论的补充会取消旧答，独立 @ 不会', async () => {
+  const time = chatClock()
+  const env = await setup({}, {}, {}, { ...time, random: () => 0 })
+  try {
+    const target = { kind: 'group', groupId: 'g1' }
+    const first = env.transport.injectText('摸头多少钱', { target, sender: { id: 'u1' }, messageId: 'q1', mentioned: true })
+    await env.store.setMode(first.chatKey, 'chat')
+    await env.bridge.handleUserMessage(first)
+    const agent = env.agents.live.get(env.agents.created[0].sessionId)
+    const old = env.bridge.dispatchReply([{ type: 'text', text: '十块' }], { agent })
+    await tick()
+    await env.bridge.handleUserMessage(env.transport.inject({ text: '他改成送鱼了', target, sender: { id: 'u2' }, messageId: 'q2', mentioned: true,
+      replyTo: { messageId: 'q1', sender: first.sender, text: first.text } }))
+    await time.advance(1000)
+    assert.equal((await old).ok, false)
+    assert.equal(env.transport.lastText(), null)
+  } finally { await env.scope.dispose() }
+})
+
+
+test('卸载立即解除首发等待，尚未发送的工具文字不会迟到', async () => {
+  const time = chatClock()
+  const env = await setup({}, {}, {}, { ...time, random: () => 0 })
+  const ev = env.transport.injectText('等一下')
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.bridge.handleUserMessage(ev)
+  const agent = env.agents.live.get(env.agents.created[0].sessionId)
+  const sending = env.bridge.dispatchReply([{ type: 'text', text: '不能迟到' }], { agent })
+  await tick()
+  await env.scope.dispose()
+  assert.equal((await sending).ok, false, '无需推进假时钟即可结束取消后的调用')
+  await time.advance(3000)
+  assert.equal(env.transport.lastText(), null)
+})
+
+test('建会话期间切模式：迟到的创建结果不绑定新模式或投递旧聊天', async () => {
+  const time = chatClock()
+  const env = await setup({}, {}, {}, { ...time, chatInputWindowMs: CHAT_INPUT_WINDOW_MS })
+  let release
+  const create = env.agents.create
+  env.agents.create = async options => {
+    await new Promise(resolve => { release = resolve })
+    return create(options)
+  }
+  try {
+    const ev = env.transport.injectText('旧聊天')
+    await env.store.setMode(ev.chatKey, 'chat')
+    await env.bridge.handleUserMessage(ev)
+    await time.advance(600)
+    assert.equal(typeof release, 'function')
+    await env.store.setMode(ev.chatKey, 'work')
+    await env.bridge.activateMode(ev.chatKey, 'work')
+    release()
+    await tick()
+    assert.equal(env.store.modeSession(ev.chatKey, 'work'), '')
+    assert.equal(env.bridge.currentSession(ev.chatKey), '')
+    const agent = env.agents.live.get(env.agents.created[0].sessionId)
+    assert.equal(agent.followed.length, 0)
+    assert.equal(agent.ctx.listenerCount('session/event'), 0)
+  } finally { await env.scope.dispose() }
 })

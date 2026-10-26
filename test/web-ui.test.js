@@ -209,7 +209,7 @@ async function setup(overrides = {}) {
     },
     writes: [],
   }
-  const webUi = createWebUi({ ctx, config, store, transport, control, alerts, groupMemory, logger })
+  const webUi = createWebUi({ ctx, config, store, transport, control, alerts, groupMemory, stickers: overrides.stickers, logger })
   transport.sentTestMessages = []
   return { dir, config, store, webServer, configEditor, credentials, control, alerts, groupMemory, ctx, logger, transport, webUi }
 }
@@ -653,4 +653,29 @@ test('状态：pricing 与最近审批透传', async () => {
   assert.equal(state.approvals.length, 1)
   assert.equal(state.approvals[0].decision, 'deny')
   assert.deepEqual(state.config.pricing, { inputPerMillion: 0, outputPerMillion: 0 })
+})
+
+test('人设精选与试聊API：保存校验、历史ID保留、CSRF、草稿隔离', async () => {
+  const id = 'a'.repeat(64)
+  const oldId = 'b'.repeat(64)
+  const missing = 'c'.repeat(64)
+  const env = await setup({ stickers: {
+    listAll: () => [{ id, state: 'library', tags: ['得意'], desc: '得意鱼' }],
+    itemOf: key => key === id ? { id, state: 'library', tags: [], desc: '得意鱼' } : null,
+  }, llm: { async *stream() { yield { type: 'text-delta', text: '一条鱼成交' }; yield { type: 'finish', reason: { kind: 'stop' } } } } })
+  await env.store.setPersona('fish', { text: '已保存', stickerIds: [oldId] })
+  const post = (url, body, headers = PANEL) => call(env.webUi, { method: 'POST', url: `/dsh-qq/api/${url}`, body, headers })
+  assert.equal((await post('personas', { action: 'save', id: 'fish', text: '更新', stickerIds: [id, oldId] })).code, 200)
+  assert.equal((await post('personas', { action: 'save', id: 'fish', text: '更新', stickerIds: [missing] })).code, 400)
+  assert.deepEqual(env.store.personaOf('fish').stickerIds, [id, oldId])
+  const picker = (await call(env.webUi, { url: `/dsh-qq/api/persona-stickers?ids=${oldId}` })).json()
+  assert.equal(picker.items.find(item => item.id === oldId).missing, true)
+  assert.equal((await post('persona-preview', { message: 'hi' }, {})).code, 403)
+  const before = env.store.snapshot()
+  const response = await post('persona-preview', { draft: { text: '未保存的鱼', stickerIds: [id] }, message: '摸头多少钱' })
+  assert.equal(response.code, 200, response.body)
+  assert.equal(response.json().reply, '一条鱼成交')
+  assert.equal(response.json().effective.text, '未保存的鱼')
+  assert.deepEqual(env.store.snapshot(), before)
+  assert.equal(env.transport.sentTestMessages.length, 0)
 })

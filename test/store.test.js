@@ -4,7 +4,7 @@ import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createStore } from '../lib/store.js'
+import { createStore, MAX_PERSONA_STICKERS, normalizePersonaStickerIds } from '../lib/store.js'
 import { createLogger } from './helpers/fake-ctx.js'
 
 const tempDir = () => mkdtemp(join(tmpdir(), 'dsh-qq-store-'))
@@ -401,6 +401,7 @@ test('人设库：保存/默认/绑定/解绑，生效来源可追踪', async ()
     source: 'defaultPersona',
     personaId: 'tech',
     personaName: '技术顾问',
+    stickerIds: [],
   })
 
   await store.bindPersona(chatKey, 'cute')
@@ -422,6 +423,70 @@ test('人设库：保存/默认/绑定/解绑，生效来源可追踪', async ()
   assert.equal(store.defaultPersonaId(), '')
   assert.equal(store.personaBinding(chatKey), '')
   assert.equal(store.effectivePromptFor(chatKey).source, 'none')
+})
+
+test('人设精选：保存去重、省略保留、显式清空，非法输入不覆盖已有选择', async () => {
+  const dir = await tempDir()
+  const store = createStore({ dir })
+  await store.load()
+  const ids = ['a'.repeat(64), 'b'.repeat(64)]
+  const saved = await store.setPersona('fish', { text: '测试人设', stickerIds: [ids[0], ids[0], ids[1]] })
+  assert.deepEqual(saved.stickerIds, ids)
+  assert.equal(store.personaList()[0].stickerCount, 2)
+  saved.stickerIds.pop()
+  assert.deepEqual(store.personaOf('fish').stickerIds, ids, '调用方修改返回数组不影响保存内容')
+  await store.setPersona('fish', { name: '新名称', text: '只改文字' })
+  assert.deepEqual(store.personaOf('fish').stickerIds, ids, '旧调用不传新字段时保留精选')
+  const revision = store.promptRevision()
+  for (const stickerIds of [null, 'not-an-array', [1], ['invalid'], ['A'.repeat(64)]]) {
+    await assert.rejects(() => store.setPersona('fish', { text: '不得保存', stickerIds }), /精选表情/)
+  }
+  const tooMany = Array.from({ length: MAX_PERSONA_STICKERS + 1 }, (_, index) => index.toString(16).padStart(64, '0'))
+  await assert.rejects(() => store.setPersona('fish', { text: '不得保存', stickerIds: tooMany }), /最多精选 40/)
+  assert.equal(store.promptRevision(), revision)
+  assert.deepEqual(store.personaOf('fish').stickerIds, ids)
+  const reloaded = createStore({ dir })
+  await reloaded.load()
+  assert.deepEqual(reloaded.personaOf('fish').stickerIds, ids)
+  await reloaded.setPersona('fish', { text: '保留人设、清空精选', stickerIds: [] })
+  assert.deepEqual(reloaded.personaOf('fish').stickerIds, [])
+  assert.equal(reloaded.personaList()[0].stickerCount, 0)
+})
+
+test('人设精选迁移：旧记录补空数组，坏项去重过滤、有界保留未知图库 ID', async () => {
+  const dir = await tempDir()
+  const store = createStore({ dir })
+  const ids = Array.from({ length: 45 }, (_, index) => index.toString(16).padStart(64, '0'))
+  await writeFile(store.file, JSON.stringify({ version: 1, chats: {}, personas: {
+    old: { name: '旧人设', text: '没有精选字段' },
+    fish: { name: '测试人设', text: '迁移精选', stickerIds: ['invalid', ids[0], ...ids, null] },
+  } }))
+  await store.load()
+  assert.deepEqual(store.personaOf('old').stickerIds, [])
+  assert.equal(store.personaList().find(item => item.id === 'old').stickerCount, 0)
+  assert.deepEqual(store.personaOf('fish').stickerIds, ids.slice(0, MAX_PERSONA_STICKERS))
+  assert.deepEqual(normalizePersonaStickerIds([ids[0], ids[0]], { strict: true }), [ids[0]])
+  assert.throws(() => normalizePersonaStickerIds(['invalid'], { strict: true }), /精选表情/)
+})
+
+test('生效人设的精选跟随默认、模式绑定和旧提示词优先级，返回数组相互隔离', async () => {
+  const store = createStore({ dir: await tempDir() })
+  await store.load()
+  const key = 'qqbot:1:group:100'
+  const workId = 'a'.repeat(64), chatId = 'b'.repeat(64)
+  await store.setPersona('work', { text: '工作', stickerIds: [workId] })
+  await store.setPersona('chat', { text: '聊天', stickerIds: [chatId] })
+  await store.setDefaultPersona('work')
+  assert.deepEqual(store.effectivePromptFor(key, 'chat').stickerIds, [workId])
+  await store.setChatPrompt(key, '旧提示词覆盖默认人设')
+  assert.deepEqual(store.effectivePromptFor(key, 'chat').stickerIds ?? [], [])
+  await store.bindPersona(key, 'work', 'work')
+  await store.bindPersona(key, 'chat', 'chat')
+  assert.deepEqual(store.effectivePromptFor(key, 'work').stickerIds, [workId])
+  const effective = store.effectivePromptFor(key, 'chat')
+  assert.deepEqual(effective.stickerIds, [chatId])
+  effective.stickerIds.length = 0
+  assert.deepEqual(store.personaOf('chat').stickerIds, [chatId])
 })
 
 test('人设库：id/空文本/超长校验，非法数据在加载时被丢弃', async () => {

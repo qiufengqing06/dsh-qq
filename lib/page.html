@@ -19,7 +19,7 @@
     --pill-warning-bg:#fff6e5; --pill-warning-ink:#6f4300;
     --pill-neutral-bg:#eef1f7; --pill-neutral-ink:#3c4655;
     --radius-xl:20px; --radius:14px; --radius-sm:9px;
-    --shadow-card:0 1px 2px rgba(16,24,40,.04), 0 14px 36px -18px rgba(16,24,40,.18); /* taste-skill-ignore: 主人指定的柔和面板质感 */
+    --shadow-card:0 1px 2px rgba(16,24,40,.04), 0 14px 36px -18px rgba(16,24,40,.18); /* taste-skill-ignore: NapCat-style soft dashboard per user's reference */
     --shadow-pop:0 2px 6px rgba(16,24,40,.06), 0 22px 48px -20px rgba(16,24,40,.28);
     --gap:16px; --pad:24px;
     --font:'Geist','Inter',system-ui,-apple-system,'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif;
@@ -47,19 +47,19 @@
     -webkit-font-smoothing:antialiased; min-height:100vh;
     background:var(--ground);
   }
-  /* 氛围底：两团极淡的光晕，让面板有柔和的层次；只有这一处渐变，其余全部实色 */
+  /* 氛围底：两团极淡的光晕，向 NapCat 的柔和感靠拢；只有这一处渐变，其余全部实色 */
   body::before {
     content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
     background:
-      radial-gradient(900px 520px at 8% -8%, rgba(29,95,191,.12), transparent 60%),  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
-      radial-gradient(760px 480px at 100% 4%, rgba(122,167,255,.14), transparent 62%),  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+      radial-gradient(900px 520px at 8% -8%, rgba(29,95,191,.12), transparent 60%),  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
+      radial-gradient(760px 480px at 100% 4%, rgba(122,167,255,.14), transparent 62%),  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
       linear-gradient(180deg, var(--ground) 0%, var(--ground) 55%, var(--surface-2) 100%); /* taste-skill-ignore: single ambient wash, deliberate per reference */
   }
   html[data-theme="dark"] body::before {
     background:
-      radial-gradient(900px 520px at 8% -8%, rgba(59,116,214,.20), transparent 62%),  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
-      radial-gradient(760px 480px at 100% 4%, rgba(96,140,224,.14), transparent 62%),  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
-      linear-gradient(180deg, #0a0e14 0%, #0b0f15 60%, #0c1119 100%);  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+      radial-gradient(900px 520px at 8% -8%, rgba(59,116,214,.20), transparent 62%),  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
+      radial-gradient(760px 480px at 100% 4%, rgba(96,140,224,.14), transparent 62%),  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
+      linear-gradient(180deg, #0a0e14 0%, #0b0f15 60%, #0c1119 100%);  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
   }
   .mono { font-family:var(--mono); /* taste-skill-ignore: 同上 */ font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
   a { color:var(--hue); text-decoration:none; }
@@ -107,10 +107,14 @@
   .trend .stack { width:100%; max-width:44px; display:flex; flex-direction:column-reverse; border-radius:6px; overflow:hidden; background:var(--raised); min-height:3px; }
   .trend .seg { width:100%; }
   .trend .seg.qqbot { background:var(--hue); }
+  .trend .seg.onebot { background:color-mix(in srgb, var(--hue) 38%, var(--surface)); }
   .trend .stack.empty { background:var(--raised); border:1px dashed var(--border); }
   .trend .day { font-size:11px; color:var(--muted); white-space:nowrap; }
   .trend .col.today .day { color:var(--text); font-weight:600; }
   .trend .col.today .stack { outline:2px solid color-mix(in srgb, var(--hue) 30%, transparent); outline-offset:2px; }
+  .trend-legend { display:flex; align-items:center; gap:14px; margin-left:auto; font-size:11.5px; color:var(--muted); }
+  .trend-legend .k { display:inline-flex; align-items:center; gap:6px; }
+  .trend-legend .sw { width:9px; height:9px; border-radius:3px; }
   .trend-empty { padding:26px 12px; text-align:center; color:var(--muted); font-size:12.5px; border:1px dashed var(--border); border-radius:14px; }
 
   .content { min-width:0; padding:20px var(--pad) 48px 8px; display:flex; flex-direction:column; gap:var(--gap); }
@@ -126,7 +130,7 @@
 
   /* ---------- cards ---------- */
   section.card { scroll-margin-top: 90px; }
-  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-xl); box-shadow:var(--shadow-card); padding:18px 20px; }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-xl); box-shadow:var(--shadow-card); padding:18px 20px; }  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
   .card-head { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
   .card { min-width:0; }
   .card-head h2 { font-size:17px; }
@@ -136,7 +140,7 @@
   .grid-2.equal { grid-template-columns:1fr 1fr; }
 
   /* ---------- hero ---------- */
-  .hero { position:relative; overflow:hidden; padding:22px 24px; border-radius:var(--radius-xl); border:1px solid var(--border); box-shadow:var(--shadow-card);  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+  .hero { position:relative; overflow:hidden; padding:22px 24px; border-radius:var(--radius-xl); border:1px solid var(--border); box-shadow:var(--shadow-card);  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
     background:linear-gradient(135deg, color-mix(in srgb, var(--hue) 9%, var(--surface)) 0%, var(--surface) 46%, var(--surface) 100%); } /* taste-skill-ignore: hero wash per reference */
   .hero-top { display:flex; align-items:flex-start; gap:20px; flex-wrap:wrap; }
   .hero-text { flex:1; min-width:280px; }
@@ -144,7 +148,7 @@
   .hero-sub { margin-top:10px; font-size:15px; color:var(--muted); max-width:70ch; }
   .hero-pills { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
   .ids { display:flex; gap:12px; flex-wrap:wrap; }
-  .id-card { display:flex; align-items:center; gap:11px; padding:10px 14px; border-radius:14px; background:var(--surface); border:1px solid var(--border); box-shadow:0 1px 2px rgba(16,24,40,.04); min-width:196px; }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+  .id-card { display:flex; align-items:center; gap:11px; padding:10px 14px; border-radius:14px; background:var(--surface); border:1px solid var(--border); box-shadow:0 1px 2px rgba(16,24,40,.04); min-width:196px; }  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
   .avatar { width:42px; height:42px; border-radius:50%; flex:none; display:grid; place-items:center; font-size:15px; font-weight:600; color:var(--hue); background:var(--hue-pale); overflow:hidden; }
   .avatar img { width:100%; height:100%; object-fit:cover; display:block; }
   .id-name { font-size:14px; font-weight:600; }
@@ -156,7 +160,7 @@
 
   /* ---------- stats ---------- */
   .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:var(--gap); }
-  .stat { padding:16px 18px; border-radius:var(--radius-xl); background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-card); }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+  .stat { padding:16px 18px; border-radius:var(--radius-xl); background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-card); }  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
   .stat .k { font-size:12.5px; color:var(--muted); }
   .stat .v { margin-top:5px; font-size:30px; font-weight:500; letter-spacing:-.025em; line-height:1.05; }
   .stat .v small { font-size:13px; color:var(--muted); font-weight:400; margin-left:5px; letter-spacing:0; }
@@ -182,7 +186,7 @@
   .hop.ok { border-color:color-mix(in srgb, var(--positive) 30%, var(--border)); background:color-mix(in srgb, var(--positive) 5%, var(--surface)); }
   .hop.ok .dot { background:var(--positive); }
   .hop.live { border-color:color-mix(in srgb, var(--hue) 42%, var(--border)); background:color-mix(in srgb, var(--hue) 6%, var(--surface)); }
-  .hop.live .dot { background:var(--hue); box-shadow:0 0 0 3px color-mix(in srgb, var(--hue) 16%, transparent); }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+  .hop.live .dot { background:var(--hue); box-shadow:0 0 0 3px color-mix(in srgb, var(--hue) 16%, transparent); }  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
   .hop.bad { border-color:color-mix(in srgb, var(--negative) 34%, var(--border)); background:color-mix(in srgb, var(--negative) 5%, var(--surface)); }
   .hop.bad .dot { background:var(--negative); }
   .hop.bad .hop-label { color:var(--negative); }
@@ -199,7 +203,7 @@
   .btn:hover { background:var(--raised); border-color:color-mix(in srgb, var(--text) 22%, var(--control)); }
   .btn:active { transform:translateY(1px); }
   .btn:focus-visible { outline:2px solid var(--hue); outline-offset:1px; }
-  .btn.primary { background:var(--primary); border-color:var(--primary); color:var(--primary-ink); box-shadow:0 6px 16px -8px rgba(16,24,40,.5); }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+  .btn.primary { background:var(--primary); border-color:var(--primary); color:var(--primary-ink); box-shadow:0 6px 16px -8px rgba(16,24,40,.5); }  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
   .btn.primary:hover { filter:brightness(1.08); }
   .btn.quiet { border-color:transparent; background:transparent; color:var(--muted); padding:0 10px; }
   .btn.quiet:hover { background:var(--raised); color:var(--text); }
@@ -222,7 +226,7 @@
   .field .help { margin-top:6px; font-size:11.5px; color:var(--muted); line-height:1.45; }
   input[type=text], input[type=password], input[type=number], select { width:100%; height:38px; padding:0 11px; border:1px solid var(--control); border-radius:11px; background:var(--surface); color:var(--text); font:inherit; font-size:14px; transition:border-color .16s var(--ease), box-shadow .16s var(--ease); }
   input::placeholder { color:var(--faint); opacity:.85; }
-  input:focus-visible, select:focus-visible { outline:none; border-color:var(--hue); box-shadow:0 0 0 3px color-mix(in srgb, var(--hue) 16%, transparent); }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+  input:focus-visible, select:focus-visible { outline:none; border-color:var(--hue); box-shadow:0 0 0 3px color-mix(in srgb, var(--hue) 16%, transparent); }  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
   .switchrow { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .switch { position:relative; width:38px; height:21px; flex:none; }
   .switch input { position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
@@ -265,16 +269,16 @@
   .cfg-title { font-size:13.5px; font-weight:600; }
   .cfg-desc { font-size:12px; color:var(--muted); margin:4px 0 14px; min-height:32px; }
   .cfg-col .fields { grid-template-columns:1fr; gap:14px; }
-  .savebar { position:sticky; bottom:14px; display:flex; align-items:center; gap:14px; margin-top:16px; padding:12px 16px; border-radius:14px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-pop); }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+  .savebar { position:sticky; bottom:14px; display:flex; align-items:center; gap:14px; margin-top:16px; padding:12px 16px; border-radius:14px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-pop); }  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
   .savebar[hidden] { display:none; }
   .savebar .txt { flex:1; font-size:12.5px; color:var(--muted); }
   .notice { padding:12px 16px; border-radius:14px; font-size:13px; border:1px solid var(--border); background:var(--pill-warning-bg); color:var(--pill-warning-ink); display:none; }
   .notice.show { display:block; }
   .notice.info { background:color-mix(in srgb, var(--hue) 8%, var(--surface)); color:var(--hue); border-color:color-mix(in srgb, var(--hue) 24%, var(--border)); }
-  .alertbar { border:1px solid color-mix(in srgb, var(--negative) 34%, var(--border)); border-radius:var(--radius-xl); background:var(--pill-negative-bg); box-shadow:var(--shadow-card);  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */ padding:14px 18px; display:flex; flex-direction:column; gap:10px; }
+  .alertbar { border:1px solid color-mix(in srgb, var(--negative) 34%, var(--border)); border-radius:var(--radius-xl); background:var(--pill-negative-bg); box-shadow:var(--shadow-card);  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */ padding:14px 18px; display:flex; flex-direction:column; gap:10px; }
   .alertbar[hidden] { display:none; }
   .alert-row { display:flex; align-items:center; gap:13px; }
-  .alert-dot { width:9px; height:9px; border-radius:50%; background:var(--negative); flex:none; box-shadow:0 0 0 4px color-mix(in srgb, var(--negative) 16%, transparent); }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+  .alert-dot { width:9px; height:9px; border-radius:50%; background:var(--negative); flex:none; box-shadow:0 0 0 4px color-mix(in srgb, var(--negative) 16%, transparent); }  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
   .alert-title { font-size:13.5px; font-weight:600; color:var(--pill-negative-ink); }
   .alert-sub { font-size:12px; color:var(--pill-negative-ink); opacity:.85; margin-top:2px; overflow-wrap:anywhere; }
   .alert-row .actions { margin-left:auto; }
@@ -316,7 +320,7 @@
   .usage-daychart .seg-out { width:100%; background:color-mix(in srgb, var(--hue) 42%, var(--surface)); }
   .usage-daychart .d { font-size:10.5px; color:var(--muted); white-space:nowrap; }
   .usage-legend { display:flex; align-items:center; gap:14px; margin-top:12px; font-size:11.5px; color:var(--muted); }
-  .usage-legend .sw { display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:6px; vertical-align:-1.5px; }
+  .usage-legend .sw { display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
   .usage-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid var(--rule); }
   .usage-row:first-child { border-top:none; }
   .usage-row .grow { flex:1; min-width:0; }
@@ -371,6 +375,19 @@
   .persona-trial-message { padding:10px 12px; background:var(--surface-2); border-radius:10px; font-size:13px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; }
   .persona-trial-message strong { display:block; margin-bottom:3px; font-size:11.5px; color:var(--muted); font-weight:500; }
   .group-editor .persona-trial textarea { min-height:78px; }
+  .persona-options { display:grid; grid-template-columns:minmax(0,2fr) minmax(160px,1fr); gap:12px; margin:12px 0; }
+  .persona-options > *, .trial-controls > * { min-width:0; }
+  .trial-controls { display:flex; flex-wrap:wrap; align-items:end; gap:10px; margin:12px 0; }
+  .trial-controls .field { flex:1 1 180px; }
+  .trial-picture { display:block; width:150px; height:120px; object-fit:contain; background:var(--raised); border-radius:8px; margin:6px 0; }
+  .trial-upload { max-width:100%; font-size:12px; }
+  .persona-trial [hidden] { display:none !important; }
+  .sticker-description { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; line-height:1.5; margin-top:6px; }
+  .sticker-editor textarea { width:100%; min-height:90px; margin:8px 0; }
+  .diagnostic-row { border-top:1px solid var(--rule); padding:10px 0; font-size:13px; overflow-wrap:anywhere; }
+  .diagnostic-row summary { cursor:pointer; line-height:1.7; }
+  .diagnostic-row ol { padding-left:22px; color:var(--muted); }
+  @media (max-width:560px) { .persona-options { grid-template-columns:1fr; } .trial-controls .field { flex-basis:100%; } }
   .persona-trial .actions, .group-editor > .row { flex-wrap:wrap; }
   .group-editor > .row > .hint:first-child { flex:0 0 auto; }
   .group-editor > .row > div.hint { flex:1 1 200px; min-width:160px; }
@@ -379,6 +396,8 @@
   .test-row select, .test-row input { height:36px; padding:0 10px; border:1px solid var(--border); border-radius:9px; background:var(--surface-2); color:var(--text); font:inherit; font-size:13px; min-width:0; }
   .test-row select:focus, .test-row input:focus { outline:none; border-color:var(--hue); box-shadow:0 0 0 3px var(--hue-pale); }
   .test-result { margin-top:10px; font-size:12.5px; color:var(--muted); }
+  .activity-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  @media (max-width:560px) { .activity-grid { grid-template-columns:1fr; gap:18px; } }
   .test-result.ok { color:var(--positive); }
   .test-result.bad { color:var(--negative); }
   .approval-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-top:1px solid var(--rule); font-size:12.5px; }
@@ -393,7 +412,7 @@
   @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
   @media (max-width:1020px) {
     .app { grid-template-columns:minmax(0,1fr); }
-    .sidebar { position:sticky; top:0; z-index:20; height:auto; flex-direction:row; align-items:center; gap:10px; padding:12px 16px; background:color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--border); }  /* taste-skill-ignore: 主人指定的柔和面板质感，仅此一处环境光/细阴影 */
+    .sidebar { position:sticky; top:0; z-index:20; height:auto; flex-direction:row; align-items:center; gap:10px; padding:12px 16px; background:color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--border); }  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
     .brand-mark { width:30px; height:30px; }
     .brand-sub { display:none; }
     .side-nav { flex-direction:row; overflow-x:auto; margin:0 0 0 8px; gap:4px; scrollbar-width:none; }
@@ -453,6 +472,7 @@
     <nav class="side-nav" id="side-nav">
       <a class="nav-item active" href="#sec-overview" data-sec="sec-overview" title="概览"><span class="ico" data-icon="dashboard"></span><span class="nav-label">概览</span></a>
       <a class="nav-item" href="#sec-lines" data-sec="sec-lines" title="线路"><span class="ico" data-icon="link"></span><span class="nav-label">线路</span><span class="nav-badge" id="badge-lines">–</span></a>
+      <a class="nav-item" href="#sec-napcat" data-sec="sec-napcat" title="个人线宿主"><span class="ico" data-icon="terminal"></span><span class="nav-label">个人线宿主</span></a>
       <a class="nav-item" href="#sec-cred" data-sec="sec-cred" title="登录与凭据"><span class="ico" data-icon="key"></span><span class="nav-label">登录与凭据</span></a>
       <a class="nav-item" href="#sec-identity" data-sec="sec-identity" title="身份与授权"><span class="ico" data-icon="user"></span><span class="nav-label">身份与授权</span><span class="nav-badge" id="badge-pending">–</span></a>
       <a class="nav-item" href="#sec-groups" data-sec="sec-groups" title="群记忆"><span class="ico" data-icon="book"></span><span class="nav-label">群记忆</span><span class="nav-badge" id="badge-groups">–</span></a>
@@ -490,7 +510,7 @@
     <section class="hero" id="sec-overview">
       <div class="hero-top">
         <div class="hero-text">
-          <h2 class="hero-title">一条通道，一个身份</h2>
+          <h2 class="hero-title">一条通道，两条线路</h2>
           <p class="hero-sub" id="finding">正在读取通道状态…</p>
           <div class="hero-pills" id="hero-pills"></div>
         </div>
@@ -509,10 +529,16 @@
 
     <div class="stats" id="stats"></div>
 
-            <section class="card" id="sec-cred">
-      <div class="card-head"><span class="ico" data-icon="key"></span><h2>登录与凭据</h2><span class="right">只写不回显</span></div>
-      <div id="credentials"></div>
-    </section>
+            <div class="grid-2">
+      <section class="card" id="sec-napcat">
+        <div class="card-head"><span class="ico" data-icon="terminal"></span><h2>个人线宿主</h2><span class="right"><a id="webui-link" target="_blank" rel="noreferrer" hidden>打开 WebUI</a></span></div>
+        <div id="napcat"></div>
+      </section>
+      <section class="card" id="sec-cred">
+        <div class="card-head"><span class="ico" data-icon="key"></span><h2>登录与凭据</h2><span class="right">只写不回显</span></div>
+        <div id="credentials"></div>
+      </section>
+    </div>
 
     <section class="card" id="sec-identity">
       <div class="card-head"><span class="ico" data-icon="user"></span><h2>身份与授权</h2><span class="right">按线路分区</span></div>
@@ -560,7 +586,7 @@
         <div class="card-head">
           <span class="ico" data-icon="activity"></span>
           <h2>活动量 · 近 7 天</h2>
-          <span class="right"><span id="trend-total"></span></span>
+          <span class="right"><span id="trend-total"></span><span class="trend-legend"><span class="k"><span class="sw" style="background:var(--hue)"></span>官方线</span><span class="k"><span class="sw" style="background:color-mix(in srgb, var(--hue) 38%, var(--surface))"></span>个人线</span></span></span>
         </div>
         <div id="trend"></div>
       </section>
@@ -641,7 +667,7 @@
   /** chatKey → 可读标签：`<线路>:<账号>:<dm|group>:<id>`。 */
   function chatDisplay(chatKey) {
     var parts = String(chatKey || '').split(':');
-    var kind = parts[0] === 'qqbot' ? '官方线' : (parts[0] || '—');
+    var kind = parts[0] === 'qqbot' ? '官方线' : parts[0] === 'onebot' ? '个人线' : (parts[0] || '—');
     var targetKind = parts[2];
     var targetId = parts.slice(3).join(':');
     var label = targetKind === 'group' ? '群 ' + targetId : targetKind === 'dm' ? '私聊 ' + targetId : (targetKind || '对话') + ' ' + targetId;
@@ -803,15 +829,20 @@
 
   /* ---------- ids / hero ---------- */
   /**
-   * 官方线头像：用机器人资料里的头像（GET /users/@me），没有就退回文字占位。
+   * 线路头像：官方线用机器人资料里的头像，个人线用 QQ 头像 CDN，都没有就退回文字占位。
+   * @param {string} kind
+   * @param {string} accountId
    * @param {string} fallbackText
-   * @param {object|null} [profile] - {name, avatar}
+   * @param {object|null} [profile] - 机器人资料（{name, avatar}），来自 transport.getProfile()
    */
-  function avatarNode(fallbackText, profile) {
-    var node = el('div', { className: 'avatar', text: fallbackText || '官' });
-    if (profile && typeof profile.avatar === 'string' && profile.avatar !== '') {
-      var img = el('img', { src: profile.avatar, alt: (profile.name || fallbackText || '机器人头像'), referrerpolicy: 'no-referrer' });
-      img.addEventListener('error', function () { node.textContent = fallbackText || '官'; });
+  function avatarNode(kind, accountId, fallbackText, profile) {
+    var node = el('div', { className: 'avatar', text: fallbackText || 'QQ' });
+    var avatarUrl = '';
+    if (profile && typeof profile.avatar === 'string' && profile.avatar !== '') avatarUrl = profile.avatar;
+    else if (kind === 'onebot' && accountId && /^[0-9]{5,12}$/.test(accountId)) avatarUrl = 'https://q1.qlogo.cn/g?b=qq&nk=' + accountId + '&s=100';
+    if (avatarUrl !== '') {
+      var img = el('img', { src: avatarUrl, alt: (profile && profile.name ? profile.name : fallbackText) || '机器人头像', referrerpolicy: 'no-referrer' });
+      img.addEventListener('error', function () { node.textContent = fallbackText || 'QQ'; });
       node.textContent = '';
       node.appendChild(img);
     }
@@ -821,43 +852,54 @@
   function renderTop() {
     var meta = document.getElementById('hero-ids');
     meta.textContent = '';
-    var line = S.routes.qqbot;
-    if (line && line.enabled) {
+    [['onebot', '个人号'], ['qqbot', '官方线']].forEach(function (pair) {
+      var kind = pair[0];
+      var line = S.routes[kind];
+      if (!line || !line.enabled) return;
       var state = lineState(line);
       var accountId = line.status && line.status.accountId ? line.status.accountId : '';
       var profile = line.profile || null;
-      meta.appendChild(el('div', { className: 'id-card' }, [
-        avatarNode('官', profile),
+      var card = el('div', { className: 'id-card' }, [
+        avatarNode(kind, accountId, kind === 'onebot' ? '小' : '官', profile),
         el('div', {}, [
-          el('div', { className: 'id-name', text: (profile && profile.name) || '官方 QQBot' }),
-          el('div', { className: 'id-meta', text: accountId ? 'AppID ' + accountId : '账号未知' })
+          el('div', { className: 'id-name', text: (profile && profile.name) || pair[1] }),
+          el('div', { className: 'id-meta', text: accountId ? (kind === 'onebot' ? accountId : 'AppID ' + accountId) : '账号未知' })
         ]),
         el('span', { className: 'id-dot ' + (state.kind === 'ok' ? 'ok' : state.kind === 'bad' ? 'bad' : state.kind === 'warn' ? 'warn' : '') })
-      ]));
-    }
+      ]);
+      meta.appendChild(card);
+    });
 
     var pills = document.getElementById('hero-pills');
     pills.textContent = '';
-    if (line && line.enabled) {
-      var pillState = lineState(line);
-      pills.appendChild(pill('官方 QQBot · ' + pillState.text, pillState.kind));
-    }
+    [S.routes.qqbot, S.routes.onebot].forEach(function (line) {
+      if (!line || !line.enabled) return;
+      var state = lineState(line);
+      pills.appendChild(pill(line.label + ' · ' + state.text, state.kind));
+    });
+    if (Array.isArray(S.lines) && S.lines.length > 1) pills.appendChild(pill('两条线路同时运行', 'neutral', false));
 
     document.getElementById('badge-lines').textContent = (Array.isArray(S.lines) ? S.lines.filter(function (l) { return l.connected === true; }).length : 0) + '/' + (Array.isArray(S.lines) ? S.lines.length : 1);
     document.getElementById('badge-pending').textContent = String(S.identity.pending.length);
     if (S.version) document.getElementById('version').textContent = S.version;
-    document.getElementById('lines-note').textContent = '单线路运行（官方 QQBot）';
+    document.getElementById('lines-note').textContent = Array.isArray(S.lines) && S.lines.length > 1 ? '两条线路同时运行' : '当前只有一条线路';
     document.getElementById('runtime-note').textContent = S.paths && S.paths.dataDir ? S.paths.dataDir : '';
   }
 
   /* ---------- finding + nudge ---------- */
   function renderFinding() {
+    var nap = S.napcat || {};
+    var onebot = S.routes.onebot;
     var qqbot = S.routes.qqbot;
+    var napcatUp = nap.running === true;
+    var loggedIn = nap.loggedIn === true;
+    var onebotOn = onebot && onebot.status && onebot.status.connected === true;
     var qqOn = qqbot && qqbot.status && qqbot.status.connected === true;
     var sessions = S.stats && S.stats.chats !== undefined ? S.stats.chats : 0;
     var parts = [];
     if (qqbot && qqbot.enabled) parts.push(qqOn ? '官方网关在线' : (qqbot.credentials.configured ? '官方网关未连接' : '官方线还没有凭据'));
-    document.getElementById('finding').textContent = (parts.length === 0 ? '这条通道没有启用。' : parts.join('；') + '。') + ' ' + sessions + ' 个会话正在使用这个通道。';
+    if (onebot && onebot.enabled) parts.push(onebotOn ? '个人线在线' : (!napcatUp ? '个人线离线（NapCat 未运行）' : (!loggedIn ? '个人线等待扫码登录' : '个人线插件未连接')));
+    document.getElementById('finding').textContent = (parts.length === 0 ? '两条线路都没有启用。' : parts.join('；') + '。') + ' ' + sessions + ' 个会话正在使用这个通道。';
 
     var nudge = document.getElementById('nudge');
     var actions = document.getElementById('nudge-actions');
@@ -865,16 +907,27 @@
     var why = document.getElementById('nudge-why');
     actions.textContent = '';
     nudge.hidden = true;
+    if (onebot && onebot.enabled && !onebotOn) {
+      if (nap.enabled === false) { nudge.hidden = false; title.textContent = '个人线离线：宿主面板在配置里关掉了'; why.textContent = '把 napcat.enabled 打开，或在 transports 里禁用个人线。'; return; }
+      if (!napcatUp) {
+        nudge.hidden = false;
+        title.textContent = '个人线离线：先启动 NapCat';
+        why.textContent = nap.ctlConfigured ? '宿主进程没起来，插件连不上 3001。启动后若需要扫码，二维码会显示在「个人线宿主」里。' : '宿主进程没起来。先在配置里填写 NapCat 管理脚本，或在终端运行启动命令。';
+        if (nap.ctlConfigured) actions.appendChild(btn('启动 NapCat', 'primary', function () { napcatAction('start'); }));
+        return;
+      }
+      if (!loggedIn) { nudge.hidden = false; title.textContent = '小号未登录：扫下面的二维码'; why.textContent = '二维码在「个人线宿主」里，约 2 分钟有效；过期的码会在页面里提示。'; return; }
+      nudge.hidden = false;
+      title.textContent = '插件没连上 NapCat';
+      why.textContent = '宿主与登录都在，试着重连一次；反复失败就看「运行信息」里的最后错误。';
+      actions.appendChild(btn('重新连接', 'primary', function () { routeAction('reconnect'); }));
+      return;
+    }
     if (qqbot && qqbot.enabled && !qqOn) {
       nudge.hidden = false;
-      if (qqbot.credentials.configured) {
-        title.textContent = '官方网关连接失败';
-        why.textContent = '先重连；仍失败的话看「运行信息」里的最后错误（常见：频率限制、网络代理）。';
-        actions.appendChild(btn('重新连接', 'primary', function () { routeAction('reconnect'); }));
-      } else {
-        title.textContent = '官方线还没有凭据';
-        why.textContent = '在「登录与凭据」里填 AppID / AppSecret，或用手机 QQ 扫码登录。';
-      }
+      title.textContent = qqbot.credentials.configured ? '官方网关连接失败' : '官方线还没有凭据';
+      why.textContent = qqbot.credentials.configured ? '先重连；仍失败的话看「运行信息」里的最后错误（常见：频率限制、网络代理）。' : '在「登录与凭据」里填 AppID / AppSecret，或用手机 QQ 扫码登录。';
+      if (qqbot.credentials.configured) actions.appendChild(btn('重新连接', 'primary', function () { routeAction('reconnect'); }));
     }
   }
 
@@ -899,6 +952,9 @@
         ])
       ]);
       var actions = el('div', { className: 'actions' });
+      if (item.kind === 'onebot' && S.napcat && S.napcat.running !== true && S.napcat.ctlConfigured) {
+        actions.appendChild(btn('启动 NapCat', 'primary sm', function () { napcatAction('start'); }));
+      }
       actions.appendChild(btn('重新连接', 'sm', function () { routeAction('reconnect'); }));
       row.appendChild(actions);
       host.appendChild(row);
@@ -926,11 +982,14 @@
     var connected = lines.filter(function (l) { return l.connected === true; }).length;
     var chats = S.stats && S.stats.chats !== undefined ? S.stats.chats : 0;
     var pending = S.identity.pending.length;
-    var auths = (S.identity.authorized.qqbot || []).length;
-    var activity = (S.connections && S.connections.qqbot.length) || 0;
+    var auths = (S.identity.authorized.qqbot || []).length + (S.identity.authorized.onebot || []).length;
+    var activity = (S.connections && (S.connections.qqbot.length + S.connections.onebot.length)) || 0;
+    host.appendChild(stat('在线线路', connected + ' / ' + lines.length, connected === lines.length ? '全部在线' : '有线路离线', connected === lines.length ? 'hl' : ''));
     var today = 0;
-    if (Array.isArray(S.activity) && S.activity.length > 0) today = S.activity[S.activity.length - 1].qqbot || 0;
-    host.appendChild(stat('在线线路', connected + ' / ' + lines.length, connected === lines.length ? '全部在线' : '线路离线', connected === lines.length ? 'hl' : ''));
+    if (Array.isArray(S.activity) && S.activity.length > 0) {
+      var last = S.activity[S.activity.length - 1];
+      today = (last.qqbot || 0) + (last.onebot || 0);
+    }
     host.appendChild(stat('DSH 会话', chats, '个', today > 0 ? '今日收到 ' + today + ' 条' : (activity > 0 ? '最近活动 ' + activity + ' 个对话' : '还没有对话')));
     host.appendChild(stat('待批配对', pending, '条', pending > 0 ? '需要你处理' : '没有积压'));
     host.appendChild(stat('已授权用户', auths, '人', auths > 0 ? '主人 + 已授权' : '还没有授权'));
@@ -955,7 +1014,7 @@
     var total = 0;
     var max = 1;
     series.forEach(function (day) {
-      var sum = day.qqbot || 0;
+      var sum = (day.qqbot || 0) + (day.onebot || 0);
       total += sum;
       max = Math.max(max, sum);
     });
@@ -963,15 +1022,22 @@
     var weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
     var todayKey = series[series.length - 1].date;
     var chart = el('div', { className: 'trend' });
-    series.forEach(function (day) {
-      var count = day.qqbot || 0;
-      var height = count === 0 ? 3 : Math.round(96 * count / max);
+    series.forEach(function (day, index) {
+      var qq = day.qqbot || 0;
+      var ob = day.onebot || 0;
+      var sum = qq + ob;
+      var stackHeight = sum === 0 ? 3 : Math.round(96 * sum / max);
       var stack = el('div', {
-        className: 'stack' + (count === 0 ? ' empty' : ''),
-        style: 'height:' + Math.max(3, height) + 'px',
-        title: day.date + ' · ' + count + ' 条'
+        className: 'stack' + (sum === 0 ? ' empty' : ''),
+        style: 'height:' + Math.max(3, stackHeight) + 'px',
+        title: day.date + ' · 官方 ' + qq + ' 条 · 个人 ' + ob + ' 条'
       });
-      if (count > 0) stack.appendChild(el('div', { className: 'seg qqbot', style: 'height:' + height + 'px' }));
+      if (sum > 0) {
+        var qqHeight = Math.round(stackHeight * qq / sum);
+        var obHeight = stackHeight - qqHeight;
+        if (qqHeight > 0) stack.appendChild(el('div', { className: 'seg qqbot', style: 'height:' + qqHeight + 'px' }));
+        if (obHeight > 0) stack.appendChild(el('div', { className: 'seg onebot', style: 'height:' + obHeight + 'px' }));
+      }
       var date = new Date(day.date + 'T00:00:00');
       var label = day.date === todayKey ? '今天' : weekday[date.getDay()];
       chart.appendChild(el('div', { className: 'col' + (day.date === todayKey ? ' today' : '') }, [stack, el('div', { className: 'day', text: label })]));
@@ -989,29 +1055,50 @@
   }
   function link(dim) { return el('div', { className: 'link' + (dim ? ' dim' : '') }); }
 
-  function lineBlock() {
-    var line = S.routes.qqbot;
+  function lineBlock(kind) {
+    var line = S.routes[kind];
+    var nap = S.napcat || {};
     var status = line.status;
     var connected = status !== null && status !== undefined && status.connected === true;
-    var accountId = status && status.accountId ? status.accountId : '';
-    var rows = el('div', { className: 'hops' }, [
-      hop('官方网关', !line.enabled ? '未启用' : (connected ? 'WebSocket 已建立' : '断开'), !line.enabled ? 'idle' : (connected ? 'ok' : 'bad')),
-      link(!connected),
-      hop('插件连接', !line.enabled ? '未启用' : (connected ? 'QQBot WS 在线' : ((status && status.phase) || '等待连接')), !line.enabled ? 'idle' : (connected ? 'live' : 'bad'))
-    ]);
-    var actions = el('div', { className: 'chain-actions' });
-    if (line.enabled) {
-      if (!connected) actions.appendChild(btn('重新连接', 'sm', function () { routeAction('reconnect'); }));
-      if (connected) actions.appendChild(btn('扫码换号', 'quiet sm', function () { doAction('login'); }));
+    var rows, actions;
+    if (kind === 'onebot') {
+      var napcatUp = nap.running === true;
+      var loggedIn = nap.loggedIn === true;
+      rows = el('div', { className: 'hops' }, [
+        hop('NapCat 进程', nap.enabled === false ? '宿主面板已关闭' : (napcatUp ? '6099 可达' : '6099 / 3001 不可达'), !line.enabled ? 'idle' : (napcatUp ? 'ok' : 'bad')),
+        link(!napcatUp),
+        hop('小号登录', loggedIn ? '3001 已监听' : '未登录（需要扫码）', !line.enabled ? 'idle' : (loggedIn ? 'ok' : 'bad')),
+        link(!loggedIn),
+        hop('插件连接', !line.enabled ? '未启用' : (connected ? 'OneBot WS 在线' : ((status && status.phase) || '等待连接')), !line.enabled ? 'idle' : (connected ? 'live' : 'bad'))
+      ]);
+      actions = el('div', { className: 'chain-actions' });
+      if (line.enabled) {
+        if (!napcatUp && nap.ctlConfigured) actions.appendChild(btn('启动 NapCat', 'primary sm', function () { napcatAction('start'); }));
+        else if (connected) actions.appendChild(btn('重新连接', 'sm', function () { routeAction('reconnect'); }));
+        if (napcatUp && nap.ctlConfigured) actions.appendChild(btn('重启宿主', 'quiet sm', function () { napcatAction('restart'); }));
+      }
+    } else {
+      rows = el('div', { className: 'hops' }, [
+        hop('官方网关', !line.enabled ? '未启用' : (connected ? 'WebSocket 已建立' : '断开'), !line.enabled ? 'idle' : (connected ? 'ok' : 'bad')),
+        link(!connected),
+        hop('插件连接', !line.enabled ? '未启用' : (connected ? 'QQBot WS 在线' : '等待连接'), !line.enabled ? 'idle' : (connected ? 'live' : 'bad'))
+      ]);
+      actions = el('div', { className: 'chain-actions' });
+      if (line.enabled) {
+        if (!connected) actions.appendChild(btn('重新连接', 'sm', function () { routeAction('reconnect'); }));
+        if (connected) actions.appendChild(btn('扫码换号', 'quiet sm', function () { doAction('login'); }));
+      }
     }
     var state = lineState(line);
+    var accountId = status && status.accountId ? status.accountId : '';
     var profile = line.profile || null;
+    var displayName = (profile && profile.name) || line.label;
     return el('div', { className: 'chain' }, [
       el('div', { className: 'line-id' }, [
-        el('div', { className: 'line-avatar' }, [avatarNode('官', profile)]),
+        el('div', { className: 'line-avatar' }, [avatarNode(kind, accountId, kind === 'onebot' ? '小' : '官', profile)]),
         el('div', { style: 'min-width:0' }, [
-          el('div', { className: 'line-name', text: (profile && profile.name) || line.label }),
-          el('div', { className: 'line-sub', text: !line.enabled ? 'transports 里未启用' : (accountId ? (profile && profile.name ? '官方 QQBot · AppID ' : 'AppID ') + accountId : '账号未知') }),
+          el('div', { className: 'line-name', text: displayName }),
+          el('div', { className: 'line-sub', text: !line.enabled ? 'transports 里未启用' : (accountId ? (kind === 'onebot' ? accountId : (profile && profile.name ? '官方 QQBot · AppID ' : 'AppID ') + accountId) : '账号未知') }),
           el('div', { className: 'line-state' }, [pill(state.text, state.kind)])
         ])
       ]),
@@ -1023,7 +1110,103 @@
   function renderBoard() {
     var host = document.getElementById('chains');
     host.textContent = '';
-    host.appendChild(lineBlock());
+    var order = [];
+    if (S.routes.onebot.enabled) order.push('onebot');
+    if (S.routes.qqbot.enabled) order.push('qqbot');
+    if (order.length === 0) order = ['qqbot', 'onebot'];
+    order.forEach(function (kind) { host.appendChild(lineBlock(kind)); });
+  }
+
+  /* ---------- napcat ---------- */
+  function kv(key, value) {
+    var v = el('div', { className: 'v', text: value, title: value });
+    v.style.overflow = 'hidden'; v.style.textOverflow = 'ellipsis'; v.style.whiteSpace = 'nowrap';
+    return el('div', { className: 'kv' }, [el('div', { className: 'k', text: key }), v]);
+  }
+  function refreshQr() { notice('已重新读取；NapCat 每约 2 分钟自行换码，长时间不更新再考虑重启宿主。', 'info'); load(); }
+
+  function renderNapcat() {
+    var host = document.getElementById('napcat');
+    host.textContent = '';
+    var nap = S.napcat;
+    var webui = document.getElementById('webui-link');
+    if (nap === null || nap === undefined) { host.appendChild(el('div', { className: 'empty', text: '当前版本未提供 NapCat 控制器。' })); return; }
+    if (nap.error) { host.appendChild(el('div', { className: 'empty', text: '读取 NapCat 状态失败：' + nap.error })); return; }
+    if (nap.enabled === false) { host.appendChild(el('div', { className: 'empty', text: 'NapCat 面板已在配置里关闭（napcat.enabled: false）。' })); webui.hidden = true; return; }
+    var primaryWebui = nap.webui && nap.webui.preferred ? nap.webui.preferred : nap.webuiUrl;
+    if (primaryWebui && primaryWebui.indexOf('127.0.0.1') !== -1) primaryWebui = primaryWebui.replace('127.0.0.1', 'localhost');
+    if (primaryWebui) { webui.href = primaryWebui; webui.hidden = false; webui.onclick = function (event) { window.openWebuiWithToken(event); }; } else { webui.hidden = true; }
+    /** 点按钮时再向服务端要带 token 的链接（GET state 不回显 token）。 */
+    window.openWebuiWithToken = function (event) {
+      if (event) event.preventDefault();
+      api('/dsh-qq/api/napcat/webui-url', {}).then(function (res) {
+        var url = res.data && res.data.ok === true ? res.data.preferred : '';
+        var target = url !== '' ? url : primaryWebui;
+        if (target) window.open(target, '_blank', 'noopener');
+        else notice('没有可用的 WebUI 地址');
+      }).catch(function () {
+        if (primaryWebui) window.open(primaryWebui, '_blank', 'noopener');
+      });
+    };
+
+    host.appendChild(el('div', { className: 'kv-grid' }, [
+      kv('宿主进程', nap.webuiReachable ? '运行中（6099 可达）' : '未运行'),
+      kv('OneBot 端口', nap.onebotListening ? '3001 监听中' : '3001 未监听'),
+      kv('小号登录', nap.loggedIn ? '已登录' : '未登录'),
+      kv('管理脚本', nap.ctlConfigured ? '已配置' : '未配置')
+    ]));
+
+    var qrInfo = nap.qr || {};
+    var qrStale = qrInfo.qrStale === true || nap.qrStale === true;
+    var wrap = el('div', { style: 'display:flex;gap:16px;align-items:flex-start;margin-top:16px;flex-wrap:wrap' });
+    if (!nap.loggedIn) {
+      var box;
+      if (qrInfo.available && !qrStale) {
+        box = el('div', { style: 'width:168px;height:168px;padding:8px;border:1px solid var(--border);border-radius:14px;background:var(--surface);flex:none' }, [
+          el('img', { src: '/dsh-qq/api/napcat/qr.png?t=' + (qrInfo.updatedAt || 0), alt: 'NapCat 登录二维码', style: 'width:100%;height:100%;display:block;image-rendering:pixelated' })
+        ]);
+      } else {
+        box = el('div', { className: 'empty', style: 'width:168px;height:168px;display:grid;place-items:center;flex:none;text-align:center;font-size:12px', text: qrInfo.available ? '二维码已过期，启动 NapCat 后生成新码' : (nap.running ? '二维码还没生成' : 'NapCat 未运行') });
+      }
+      wrap.appendChild(box);
+      wrap.appendChild(el('div', { style: 'flex:1;min-width:190px' }, [
+        el('p', { style: 'font-size:12.5px;color:var(--muted)', text: nap.running ? '用手机 QQ 扫描左侧二维码完成登录；扫码后 NapCat 会自己连上。' : 'NapCat 是个人线的宿主进程，没运行时插件连不上。' }),
+        qrInfo.available && !qrStale ? el('p', { style: 'font-size:11.5px;color:var(--faint);margin-top:6px', text: '生成于 ' + fmtTime(qrInfo.updatedAt) + '，约 2 分钟有效。' }) : null,
+        el('div', { className: 'actions', style: 'margin-top:12px' }, [
+          nap.ctlConfigured && !nap.running ? btn('启动 NapCat', 'primary sm', function () { napcatAction('start'); }) : null,
+          nap.running ? btn('重启 NapCat', 'sm', function () { napcatAction('restart'); }) : null,
+          nap.running ? btn('停止 NapCat', 'danger sm', function () { napcatAction('stop'); }) : null,
+          nap.running && !nap.loggedIn ? btn('刷新二维码', 'sm', function () { refreshQr(); }) : null
+        ])
+      ]));
+    } else {
+      host.appendChild(el('div', { className: 'empty', style: 'margin-top:16px', text: '小号已登录，无需扫码；登录态失效时 NapCat 会重新生成二维码。' }));
+      host.appendChild(el('div', { className: 'actions', style: 'margin-top:14px' }, [
+        btn('重启 NapCat', 'sm', function () { napcatAction('restart'); }),
+        btn('停止 NapCat', 'danger sm', function () { napcatAction('stop'); }),
+        primaryWebui ? btn('打开 WebUI', 'quiet sm', function () { window.open(primaryWebui, '_blank', 'noopener'); }) : null
+      ]));
+    }
+    var webuiLinks = nap.webui && Array.isArray(nap.webui.alternates) ? nap.webui.alternates.slice() : [];
+    // 兼容旧后端：配置里是 127.0.0.1 时补一个 localhost 链接（Windows 浏览器访问 WSL 用 localhost 才通）
+    if (webuiLinks.length === 0 && nap.webuiUrl && nap.webuiUrl.indexOf('127.0.0.1') !== -1) {
+      webuiLinks.push({ label: 'localhost', url: nap.webuiUrl.replace('127.0.0.1', 'localhost') });
+    }
+    if (webuiLinks.length > 0) {
+      var altRow = el('div', { style: 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--muted)' }, [
+        el('span', { text: 'WebUI 打不开？试试：' })
+      ]);
+      webuiLinks.forEach(function (link) {
+        altRow.appendChild(el('a', { href: link.url, target: '_blank', rel: 'noreferrer', title: link.url, text: link.label, style: 'font-size:11.5px' }));
+      });
+      host.appendChild(altRow);
+    }
+
+    host.appendChild(el('div', { className: 'kv-grid', style: 'margin-top:16px;padding-top:14px;border-top:1px solid var(--rule)' }, [
+      kv('管理脚本', (S.config.napcat && S.config.napcat.ctlScript) || '未配置'),
+      kv('二维码文件', (S.config.napcat && S.config.napcat.qrFile) || '未配置')
+    ]));
+    host.querySelectorAll('.kv .v').forEach(function (node) { node.classList.add('mono'); node.style.fontSize = '12px'; });
   }
 
   /* ---------- credentials ---------- */
@@ -1031,6 +1214,7 @@
     var host = document.getElementById('credentials');
     host.textContent = '';
     var qq = S.routes.qqbot;
+    var ob = S.routes.onebot;
     var qqBlock = el('div', { className: 'block' });
     qqBlock.appendChild(el('div', { className: 'block-head' }, [el('span', { className: 'block-title', text: '官方 QQBot' }), pill(qq.credentials.configured ? '已配置' : '未配置', qq.credentials.configured ? 'ok' : 'neutral', false)]));
     qqBlock.appendChild(el('div', { className: 'block-desc', text: qq.credentials.configured ? 'AppID ' + (qq.credentials.appId || '—') + '；AppSecret 已保存且不回显。' : 'AppID / AppSecret 只写入 DSH credentials，不进配置与聊天记录。' }));
@@ -1040,7 +1224,7 @@
         btn('清除凭据', 'quiet sm', function () { saveCredentials({ route: 'qqbot', clear: true }); })
       ]));
     } else {
-      var appId = el('input', { type: 'text', placeholder: '例如 1905346673', autocomplete: 'off' });
+      var appId = el('input', { type: 'text', placeholder: '例如 100001', autocomplete: 'off' });
       var appSecret = el('input', { type: 'password', placeholder: 'AppSecret（只写，不回显）', autocomplete: 'off' });
       qqBlock.appendChild(el('div', { className: 'fields', style: 'grid-template-columns:1fr 1fr' }, [
         el('div', { className: 'field' }, [el('label', { text: 'AppID' }), appId]),
@@ -1052,6 +1236,17 @@
       ]));
     }
     host.appendChild(qqBlock);
+
+    var obBlock = el('div', { className: 'block' });
+    obBlock.appendChild(el('div', { className: 'block-head' }, [el('span', { className: 'block-title', text: '个人号 access_token' }), pill(ob.credentials.configured ? '已配置' : '未配置', ob.credentials.configured ? 'ok' : 'neutral', false)]));
+    obBlock.appendChild(el('div', { className: 'block-desc', text: 'NapCat 没启用 token 时可以留空；保存后会自动重连。' }));
+    var token = el('input', { type: 'password', placeholder: 'access_token（只写，不回显）', autocomplete: 'off' });
+    obBlock.appendChild(el('div', { className: 'field' }, [el('label', { text: 'OneBot access_token' }), token]));
+    obBlock.appendChild(el('div', { className: 'actions', style: 'margin-top:12px' }, [
+      btn('保存 token', 'primary sm', function () { saveCredentials({ route: 'onebot', accessToken: token.value.trim() }); }),
+      btn('清除 token', 'quiet sm', function () { saveCredentials({ route: 'onebot', clear: true }); })
+    ]));
+    host.appendChild(obBlock);
     host.appendChild(el('div', { className: 'notice info', id: 'linkbox' }));
   }
 
@@ -1060,11 +1255,11 @@
     var host = document.getElementById('identity');
     host.textContent = '';
     var grid = el('div', { className: 'grid-2 equal' });
-    ['qqbot'].forEach(function (kind) {
+    ['qqbot', 'onebot'].forEach(function (kind) {
       var route = S.routes[kind];
       var block = el('div', { className: 'block' });
       block.appendChild(el('div', { className: 'block-head' }, [el('span', { className: 'block-title', text: route.label + ' 身份' }), route.enabled ? pill('启用中', 'live', false) : pill('未启用', 'neutral', false)]));
-      var home = el('input', { type: 'text', value: S.identity.homeChannels[kind] || '', placeholder: '主人 openid（扫码登录后自动绑定）' });
+      var home = el('input', { type: 'text', value: S.identity.homeChannels[kind] || '', placeholder: kind === 'qqbot' ? '主人 openid（扫码登录后自动绑定）' : '主人 QQ 号' });
       block.appendChild(el('div', { className: 'field' }, [el('label', { text: '主人 home channel' }), home]));
       block.appendChild(el('div', { className: 'actions', style: 'margin-top:10px' }, [
         btn('保存主人', 'sm', function () { doIdentity({ route: kind, action: 'setHome', userId: home.value.trim() }); })
@@ -1091,10 +1286,10 @@
       table.appendChild(el('thead', {}, [el('tr', {}, [el('th', { text: '用户' }), el('th', { text: '线路' }), el('th', { className: 'right', text: '操作' })])]));
       var tbody = el('tbody', {});
       S.identity.pending.forEach(function (item) {
-        var kind = item.transportKind || 'qqbot';
+        var kind = item.transportKind || 'onebot';
         tbody.appendChild(el('tr', {}, [
           el('td', {}, [el('div', { style: 'font-size:13.5px', text: item.name || item.id }), el('div', { className: 'mono', style: 'font-size:11.5px;color:var(--muted)', text: item.id })]),
-          el('td', {}, [pill('官方线', 'neutral', false)]),
+          el('td', {}, [pill(kind === 'qqbot' ? '官方线' : '个人线', 'neutral', false)]),
           el('td', { className: 'right' }, [el('div', { className: 'actions', style: 'justify-content:flex-end' }, [
             btn('批准', 'sm', function () { doIdentity({ route: kind, action: 'approve', userId: item.id }); }),
             btn('拒绝', 'quiet sm', function () { doIdentity({ route: kind, action: 'deny', userId: item.id }); })
@@ -1132,7 +1327,7 @@
   /* ---------- 群记忆（群笔记）---------- */
   var editingGroupFile = '';
 
-  /** 文件名 → 人看标签：..._group_798898058.md → 群 798898058 */
+  /** 文件名 → 人看标签：onebot_100002_group_100003.md → 群 100003 */
   function groupLabel(file) {
     var name = String(file || '').replace(/\.md$/, '');
     var match = name.match(/(?:group|dm)_([A-Za-z0-9_-]+)$/);
@@ -1215,7 +1410,7 @@
   /** chatKey → 可读标签（不依赖页面其它状态）。 */
   function promptLabel(chatKey) {
     var parts = String(chatKey || '').split(':');
-    var kind = parts[0] === 'qqbot' ? '官方线' : (parts[0] || '—');
+    var kind = parts[0] === 'qqbot' ? '官方线' : parts[0] === 'onebot' ? '个人线' : (parts[0] || '—');
     var targetKind = parts[2];
     var targetId = parts.slice(3).join(':');
     if (targetKind === 'group') return { kind: kind, label: '群 ' + targetId };
@@ -1257,6 +1452,27 @@
   var personaDraft = null;
   var personaStickerState = null;
   var personaTrial = null;
+  var diagnosticOpen = {};
+
+  function activityLabel(value) {
+    return ({ inherit: '继承', quiet: '安静', normal: '正常', active: '活跃' })[value] || '继承';
+  }
+
+  function activitySelect(value, label) {
+    var select = el('select', { 'aria-label': label });
+    ['inherit', 'quiet', 'normal', 'active'].forEach(function (key) { select.appendChild(el('option', { value: key, text: activityLabel(key) })); });
+    select.value = ['quiet', 'normal', 'active'].indexOf(value) >= 0 ? value : 'inherit';
+    return select;
+  }
+
+  function personaAliases(value) {
+    return Array.from(new Set((Array.isArray(value) ? value : String(value || '').split(/[\s,，]+/)).map(function (name) { return name.trim(); }).filter(Boolean)));
+  }
+
+  function releasePersonaTrial() {
+    if (personaTrial && personaTrial.imageUrl) URL.revokeObjectURL(personaTrial.imageUrl);
+    personaTrial = null;
+  }
   var personaPreviews = {};
 
   function personaById(id) {
@@ -1317,9 +1533,9 @@
   function startPersonaEdit(id) {
     if (id === '') {
       personaEditing = '@new';
-      personaDraft = { id: '', name: '', text: '', stickerIds: [] };
+      personaDraft = { id: '', name: '', text: '', stickerIds: [], aliases: [], activity: 'inherit' };
       personaStickerState = null;
-      personaTrial = null;
+      releasePersonaTrial();
       renderPrompts();
       return;
     }
@@ -1329,7 +1545,7 @@
       // 旧后端详情没有 id；编辑对象以用户点开的列表项为准。
       personaDraft = Object.assign({}, res.data.persona, { id: id });
       personaStickerState = null;
-      personaTrial = null;
+      releasePersonaTrial();
       renderPrompts();
     }).catch(function (error) { notice(String(error.message || error), 'bad'); });
   }
@@ -1363,6 +1579,7 @@
       else if (ids.length < 40) ids.push(id);
       else { status.textContent = '最多选择 40 张，先移除一张再添加。'; status.className = 'persona-status bad'; return; }
       personaDraft.stickerIds = ids;
+      if (personaTrial && personaTrial.redraw) personaTrial.redraw();
       draw();
       var nextFocus = document.getElementById('persona-sticker-choice-' + encodeURIComponent(id)) || search;
       nextFocus.focus();
@@ -1423,6 +1640,7 @@
     var box = el('div');
     var sources = { draft: '未保存草稿', persona: '指定人设', binding: '对话绑定', defaultPersona: '默认人设', chat: '对话旧提示词', default: '旧默认提示词', none: '未设置人设' };
     box.appendChild(el('p', { text: (effective.mode === 'work' ? '工作模式' : '聊天模式') + ' · ' + (sources[effective.source] || effective.source || '人设') + (effective.personaName ? ' · ' + effective.personaName : '') }));
+    box.appendChild(el('p', { className: 'hint', text: '呼唤昵称：' + (personaAliases(effective.aliases).join('、') || '未设置') + ' · 活跃档位：' + activityLabel(effective.activity) }));
     box.appendChild(el('pre', { text: effective.text || '没有额外人设文本。' }));
     if (effective.chatNote) box.appendChild(el('details', {}, [el('summary', { text: '查看聊天规则' }), el('pre', { text: effective.chatNote })]));
     box.appendChild(el('p', { text: '精选表情：' + (effective.stickerCount ?? personaStickerIds(effective).length) + ' 张' }));
@@ -1458,63 +1676,164 @@
   }
 
   function personaTrialPanel() {
-    var trial = personaTrial || (personaTrial = { history: [], input: '', draftKey: '', busy: false, error: '', effective: null, model: null });
+    var trial = personaTrial || (personaTrial = { history: [], input: '', draftKey: '', busy: false, error: '', effective: null, model: null, chatKey: '', imageStickerId: '', image: null, imageUrl: '', reading: false, cases: null });
+    var caseKey = 'dsh-qq.persona-trial-cases.v1';
+    if (!trial.cases) {
+      try {
+        var saved = JSON.parse(localStorage.getItem(caseKey) || '[]');
+        trial.cases = (Array.isArray(saved) ? saved : []).filter(function (item) { return item && typeof item.message === 'string'; }).slice(0, 10).map(function (item) {
+          return { id: String(item.id || ''), message: item.message.slice(0, 1000), imageStickerId: /^[a-f0-9]{64}$/.test(item.imageStickerId || '') ? item.imageStickerId : '' };
+        });
+      } catch (_) { trial.cases = []; }
+    }
     var box = el('section', { className: 'persona-section persona-trial', 'aria-label': '隔离试聊' });
-    box.appendChild(el('h3', { text: '隔离试聊' }));
-    box.appendChild(el('p', { className: 'hint', text: '使用未保存的人设试聊文字口吻；精选表情在真实聊天中优先使用，这里不模拟选图或发图。试聊不保存、不绑定会话、不发到 QQ，也不加载真实群历史；会调用模型并产生用量。' }));
+    box.appendChild(el('h3', { text: '隔离试聊 · 图文预演' }));
+    box.appendChild(el('p', { className: 'hint', text: '使用未保存的人设、QQ 聊天规则和本页输入预演文字与选图。会调用模型并产生用量；不保存人设、不绑定会话、不发到 QQ，也不加载真实群历史或完整宿主上下文。真实发送还受平台能力影响。' }));
     var log = el('div', { className: 'persona-trial-log', id: 'persona-trial-log', role: 'log', 'aria-live': 'polite' });
-    var input = el('textarea', { id: 'persona-trial-message', name: 'persona-trial-message', 'aria-label': '试聊消息', maxlength: 1000, rows: 2, placeholder: '试着和这个人设聊一句…' });
+    var input = el('textarea', { id: 'persona-trial-message', name: 'persona-trial-message', 'aria-label': '试聊消息', maxlength: 1000, rows: 2, placeholder: '试着和这个人设聊一句，也可以只发一张图…' });
     input.value = trial.input;
     var status = el('div', { className: 'persona-status', id: 'persona-trial-status', role: 'status', 'aria-live': 'polite' });
     var details = el('div');
+    var chat = el('select', { id: 'persona-trial-chat', name: 'persona-trial-chat', 'aria-label': '预演对话' });
+    chat.appendChild(el('option', { value: '', text: '不选对话（仅预演人设）' }));
+    (S.chatKeys || []).forEach(function (key) { chat.appendChild(el('option', { value: key, text: promptLabel(key).label })); });
+    chat.value = trial.chatKey;
+    chat.addEventListener('change', function () { trial.chatKey = chat.value; });
+    var picture = el('select', { id: 'persona-trial-sticker', name: 'persona-trial-sticker', 'aria-label': '用精选表情作为输入' });
+    var upload = el('input', { type: 'file', id: 'persona-trial-upload', name: 'persona-trial-upload', accept: 'image/png,image/jpeg,image/webp', className: 'trial-upload', 'aria-label': '上传试聊图片' });
+    var imagePreview = el('div', { id: 'persona-trial-image' });
+    function removeUpload() {
+      if (trial.imageUrl) URL.revokeObjectURL(trial.imageUrl);
+      trial.imageUrl = ''; trial.image = null; upload.value = '';
+    }
+    picture.addEventListener('change', function () { removeUpload(); trial.imageStickerId = picture.value; refresh(); });
+    upload.addEventListener('change', function () {
+      var file = upload.files && upload.files[0];
+      if (!file) return;
+      if (['image/png', 'image/jpeg', 'image/webp'].indexOf(file.type) < 0 || file.size > 2 * 1024 * 1024 || !file.size) {
+        trial.error = '请选择不超过 2 MiB 的 PNG、JPG 或 WebP 图片。'; upload.value = ''; refresh(); return;
+      }
+      removeUpload(); trial.imageStickerId = ''; trial.reading = true; trial.error = ''; refresh();
+      var reader = new FileReader();
+      reader.onload = function () {
+        trial.reading = false;
+        if (personaTrial !== trial) return;
+        trial.image = { data: String(reader.result).split(',')[1], mime: file.type, name: file.name };
+        trial.imageUrl = URL.createObjectURL(file); refresh();
+      };
+      reader.onerror = function () { trial.reading = false; trial.error = '图片读取失败，请重新选择。'; if (personaTrial === trial) refresh(); };
+      reader.readAsDataURL(file);
+    });
+    var removeImage = btn('移除输入图片', 'quiet sm', function () { removeUpload(); trial.imageStickerId = ''; refresh(); });
     var send = btn('试聊', 'sm', function () {
-      if (trial.busy) return;
+      if (trial.busy || trial.reading) return;
       var message = input.value.trim();
-      if (!message || message.length > 1000) { trial.error = '请输入 1–1000 字的试聊消息。'; refresh(); input.focus(); return; }
-      var draft = { id: personaDraft.id, name: personaDraft.name, text: personaDraft.text, stickerIds: personaStickerIds(personaDraft) };
+      if ((!message && !trial.image && !trial.imageStickerId) || message.length > 1000) { trial.error = '请输入不超过 1000 字的消息，或选择一张图片。'; refresh(); input.focus(); return; }
+      if (trial.imageStickerId && !trial.chatKey) { trial.error = '先选择预演对话，以检查这张图库图片的使用范围。'; refresh(); chat.focus(); return; }
+      var draft = { id: personaDraft.id, name: personaDraft.name, text: personaDraft.text, stickerIds: personaStickerIds(personaDraft), aliases: personaAliases(personaDraft.aliases), activity: personaDraft.activity || 'inherit' };
       if (!String(draft.text || '').trim()) { trial.error = '先填写人设内容，再试聊。'; refresh(); return; }
-      var key = JSON.stringify(draft);
+      var key = JSON.stringify([draft, trial.chatKey]);
       if (key !== trial.draftKey) trial.history = [];
       trial.draftKey = key;
       var history = trial.history.slice(-12).map(function (item) { return { role: item.role, content: item.content.slice(0, 1000) }; });
-      trial.busy = true;
-      trial.error = '';
-      refresh();
-      api('/dsh-qq/api/persona-preview', { mode: 'chat', draft: draft, message: message, history: history }).then(function (res) {
-        if (!res.data || res.data.ok !== true || typeof res.data.reply !== 'string') throw new Error((res.data && res.data.error) || '试聊未返回回复，请重试。');
-        trial.history = history.concat([{ role: 'user', content: message }, { role: 'assistant', content: res.data.reply }]).slice(-12);
-        trial.effective = res.data.effective;
-        trial.model = res.data.model;
-        trial.input = '';
+      var body = { mode: 'chat', draft: draft, message: message, history: history, previewActions: true };
+      if (trial.chatKey) body.chatKey = trial.chatKey;
+      if (trial.image) body.image = trial.image;
+      else if (trial.imageStickerId) body.imageStickerId = trial.imageStickerId;
+      var previous = trial.history.slice();
+      trial.busy = true; trial.error = ''; refresh();
+      api('/dsh-qq/api/persona-preview', body).then(function (res) {
+        if (!res.data || res.data.ok !== true || (typeof res.data.reply !== 'string' && !Array.isArray(res.data.actions))) throw new Error((res.data && res.data.error) || '试聊未返回回复，请重试。');
+        var actions = Array.isArray(res.data.actions) ? res.data.actions : [{ type: 'text', text: res.data.reply }];
+        var reply = res.data.reply || actions.filter(function (action) { return action.type === 'text'; }).map(function (action) { return action.text; }).join('\n') || '[图片预演]';
+        trial.history = previous.concat([{ role: 'user', content: message || '[图片输入]', imageStickerId: body.imageStickerId, uploaded: Boolean(body.image) }, { role: 'assistant', content: reply, actions: actions, warnings: res.data.warnings || [] }]).slice(-12);
+        trial.effective = res.data.effective; trial.model = res.data.model;
+        trial.input = ''; removeUpload(); trial.imageStickerId = '';
       }).catch(function (error) { trial.error = String(error.message || error); }).finally(function () {
         trial.busy = false;
         if (personaTrial === trial) trial.redraw();
       });
     });
-    var clear = btn('清空试聊', 'quiet sm', function () { trial.history = []; trial.error = ''; trial.effective = null; trial.model = null; refresh(); });
+    var clear = btn('清空试聊', 'quiet sm', function () { trial.history = []; trial.error = ''; trial.effective = null; trial.model = null; removeUpload(); trial.imageStickerId = ''; refresh(); });
+    var cases = el('select', { id: 'persona-trial-cases', 'aria-label': '本地测试样例' });
+    function storeCases(next) {
+      try { localStorage.setItem(caseKey, JSON.stringify(next)); trial.cases = next; return true; }
+      catch (_) { trial.error = '浏览器无法保存样例，请检查存储权限或可用空间。'; return false; }
+    }
+    var saveCase = btn('保存为样例', 'quiet sm', function () {
+      var message = input.value.trim();
+      if (!message && !trial.imageStickerId) { trial.error = '样例需要文字或图库图片；上传图片不保存，请换成图库图片或补充文字。'; refresh(); return; }
+      if (trial.cases.length >= 10) { trial.error = '最多保存 10 条样例，请先删除不需要的。'; refresh(); return; }
+      if (trial.image && !window.confirm('上传的原图不会保存。只把当前文字保存为样例？')) return;
+      if (storeCases(trial.cases.concat([{ id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), message: message.slice(0, 1000), imageStickerId: trial.imageStickerId || '' }]))) trial.error = '';
+      refresh();
+    });
+    var loadCase = btn('加载样例', 'quiet sm', function () {
+      var item = trial.cases.find(function (row) { return row.id === cases.value; });
+      if (!item) return;
+      removeUpload(); trial.input = item.message; trial.imageStickerId = item.imageStickerId; trial.error = ''; refresh(); input.focus();
+    });
+    var deleteCase = btn('删除样例', 'quiet sm', function () {
+      if (!cases.value || !window.confirm('删除这个本地测试样例？')) return;
+      storeCases(trial.cases.filter(function (item) { return item.id !== cases.value; })); refresh();
+    });
+    function imageNode(id, description) {
+      return el('img', { src: '/dsh-qq/api/stickers/image?id=' + encodeURIComponent(id), width: 150, height: 120, className: 'trial-picture', alt: description || '图库图片', loading: 'lazy' });
+    }
     function refresh() {
       log.textContent = '';
       trial.history.forEach(function (item) {
-        log.appendChild(el('div', { className: 'persona-trial-message' }, [el('strong', { text: item.role === 'user' ? '你' : '试聊回复' }), el('span', { text: item.content })]));
+        var bubble = el('div', { className: 'persona-trial-message' }, [el('strong', { text: item.role === 'user' ? '你' : '试聊回复' })]);
+        if (item.actions) item.actions.forEach(function (action) {
+          if (action.type === 'text') bubble.appendChild(el('div', { text: action.text || '' }));
+          else if (action.type === 'sticker') {
+            if (action.available !== false && action.id) bubble.appendChild(imageNode(action.id, action.desc));
+            bubble.appendChild(el('div', { className: 'hint', text: action.available === false ? '未能使用图片：' + (action.reason || '当前不可用') : action.desc || '图片预演' }));
+          }
+        });
+        else {
+          bubble.appendChild(el('span', { text: item.content }));
+          if (item.imageStickerId) bubble.appendChild(imageNode(item.imageStickerId, '试聊输入图片'));
+          if (item.uploaded) bubble.appendChild(el('div', { className: 'hint', text: '附带上传图片（仅本次请求）' }));
+        }
+        (item.warnings || []).forEach(function (warning) { bubble.appendChild(el('div', { className: 'hint', text: warning })); });
+        log.appendChild(bubble);
       });
-      send.disabled = trial.busy;
-      clear.disabled = trial.busy;
-      input.disabled = trial.busy;
+      var busy = trial.busy || trial.reading;
+      [send, clear, input, chat, picture, upload, removeImage, saveCase, loadCase, deleteCase, cases].forEach(function (node) { node.disabled = busy; });
       input.value = trial.input;
       send.textContent = trial.busy ? '试聊中…' : '试聊';
-      box.setAttribute('aria-busy', trial.busy ? 'true' : 'false');
+      box.setAttribute('aria-busy', busy ? 'true' : 'false');
       status.className = 'persona-status' + (trial.error ? ' bad' : '');
-      status.textContent = trial.busy ? '正在生成回复…' : trial.error || (trial.history.length ? '按发送时的草稿生成；修改人设后再次试聊会开始新对话。' : '最多保留最近 6 轮试聊，仅在本次编辑中可见。');
+      status.textContent = trial.reading ? '正在读取图片…' : trial.busy ? '正在生成图文预演…' : trial.error || (trial.history.length ? '按发送时的草稿生成；修改人设或预演对话后再次试聊会开始新对话。' : '最多保留最近 6 轮文字历史；图片仅用于本轮输入。');
+      picture.textContent = ''; picture.appendChild(el('option', { value: '', text: '不使用图库图片' }));
+      var ids = personaStickerIds(personaDraft);
+      if (trial.imageStickerId && ids.indexOf(trial.imageStickerId) < 0) ids.push(trial.imageStickerId);
+      ids.forEach(function (id) {
+        var item = personaStickerState && personaStickerState.items.find(function (row) { return row.id === id; });
+        picture.appendChild(el('option', { value: id, text: item && item.desc ? item.desc : id.slice(0, 12) }));
+      });
+      picture.value = trial.imageStickerId;
+      imagePreview.textContent = '';
+      if (trial.imageUrl) imagePreview.appendChild(el('img', { src: trial.imageUrl, width: 150, height: 120, className: 'trial-picture', alt: '本次上传图片' }));
+      else if (trial.imageStickerId) imagePreview.appendChild(imageNode(trial.imageStickerId, '待发送的图库图片'));
+      removeImage.hidden = !trial.imageUrl && !trial.imageStickerId;
+      var selected = cases.value;
+      cases.textContent = ''; cases.appendChild(el('option', { value: '', text: '选择本地样例（' + trial.cases.length + ' / 10）' }));
+      trial.cases.forEach(function (item, index) { cases.appendChild(el('option', { value: item.id, text: (index + 1) + '. ' + (item.message || '图片样例').slice(0, 40) + (item.imageStickerId ? ' · 图' : '') })); });
+      cases.value = trial.cases.some(function (item) { return item.id === selected; }) ? selected : '';
       details.textContent = '';
       if (trial.effective) details.appendChild(el('details', { className: 'persona-effective' }, [el('summary', { text: '查看本次人设与聊天规则' }), personaEffectiveDetails(trial.effective, trial.model)]));
     }
     trial.redraw = refresh;
     input.addEventListener('input', function () { trial.input = input.value; });
     box.appendChild(log);
-    box.appendChild(input);
+    box.appendChild(el('div', { className: 'trial-controls' }, [el('div', { className: 'field' }, [el('label', { for: chat.id, text: '预演对话（检查图库权限）' }), chat]), el('div', { className: 'field' }, [el('label', { for: picture.id, text: '用精选表情作为输入' }), picture])]));
+    box.appendChild(el('div', { className: 'field' }, [el('label', { for: upload.id, text: '或上传图片 · PNG / JPG / WebP，最多 2 MiB' }), upload]));
+    box.appendChild(imagePreview); box.appendChild(removeImage); box.appendChild(input);
     box.appendChild(el('div', { className: 'actions' }, [send, clear]));
-    box.appendChild(status);
-    box.appendChild(details);
+    box.appendChild(status); box.appendChild(details);
+    box.appendChild(el('details', { className: 'persona-effective' }, [el('summary', { text: '本地测试样例' }), el('p', { className: 'hint', text: '手动保存，最多 10 条，仅保存在当前浏览器。只保存文字和图库图片编号，不保存上传原图、群历史或人设；不会上传样例列表。' }), cases, el('div', { className: 'actions' }, [saveCase, loadCase, deleteCase])]));
     refresh();
     return box;
   }
@@ -1538,9 +1857,14 @@
     var nameInput = el('input', { type: 'text', id: 'persona-name', name: 'persona-name', 'aria-label': '人设名称', autocomplete: 'off', placeholder: '名称，例如 技术顾问', value: draft.name || '' });
     var textarea = el('textarea', { id: 'persona-text', name: 'persona-text', 'aria-label': '人设内容', placeholder: '人设文本（最多 4000 字）' });
     textarea.value = draft.text || '';
+    var aliases = el('input', { type: 'text', id: 'persona-aliases', name: 'persona-aliases', autocomplete: 'off', 'aria-label': '呼唤昵称', placeholder: '例如：鱼鱼，小鱼…', value: Array.isArray(draft.aliases) ? draft.aliases.join('，') : (draft.aliases || '') });
+    var activity = activitySelect(draft.activity, '人设默认活跃档位');
+    activity.id = 'persona-activity';
     var rememberDraft = function () {
-      personaDraft = { id: editingExisting ? editingId : idInput.value, name: nameInput.value, text: textarea.value, stickerIds: personaStickerIds(personaDraft) };
+      personaDraft = { id: editingExisting ? editingId : idInput.value, name: nameInput.value, text: textarea.value, stickerIds: personaStickerIds(personaDraft), aliases: aliases.value, activity: activity.value };
     };
+    aliases.addEventListener('input', rememberDraft);
+    activity.addEventListener('change', rememberDraft);
     idInput.addEventListener('input', rememberDraft);
     nameInput.addEventListener('input', rememberDraft);
     textarea.addEventListener('input', rememberDraft);
@@ -1549,6 +1873,10 @@
     textarea.addEventListener('input', refresh);
     refresh();
     box.appendChild(el('div', { className: 'persona-fields' }, [idInput, nameInput]));
+    box.appendChild(el('div', { className: 'persona-options' }, [
+      el('div', { className: 'field' }, [el('label', { for: 'persona-aliases', text: '呼唤昵称' }), aliases, el('div', { className: 'help', text: '最多 8 个，每个 2–20 字，用逗号或空格分隔。用于识别群友在叫机器人。' })]),
+      el('div', { className: 'field' }, [el('label', { for: 'persona-activity', text: '默认活跃档位' }), activity, el('div', { className: 'help', text: '影响新话题接话；群内单独设置优先，正常续聊不受此档位限制。' })])
+    ]));
     box.appendChild(textarea);
     box.appendChild(personaStickerPicker());
     box.appendChild(personaTrialPanel());
@@ -1556,23 +1884,25 @@
       count,
       el('div', { className: 'hint', text: '保存后下一回合生效；绑定到对话会覆盖该对话的旧提示词。' }),
       btn('保存', 'primary sm', function () {
+        var names = personaAliases(aliases.value);
+        if (names.length > 8 || names.some(function (name) { return Array.from(name).length < 2 || Array.from(name).length > 20; })) { notice('呼唤昵称最多 8 个，每个需要 2–20 字。', 'bad'); aliases.focus(); return; }
         personaAction({
           action: 'save',
           id: editingExisting ? editingId : idInput.value.trim(),
           name: nameInput.value.trim(),
           text: textarea.value,
-          stickerIds: personaStickerIds(personaDraft)
+          stickerIds: personaStickerIds(personaDraft), aliases: names, activity: activity.value
         }, '人设已保存').then(function (ok) {
-          if (ok) { personaEditing = ''; personaDraft = null; renderPrompts(); }
+          if (ok) { personaEditing = ''; personaDraft = null; releasePersonaTrial(); renderPrompts(); }
         });
       }),
-      btn('取消', 'quiet sm', function () { personaEditing = ''; personaDraft = null; renderPrompts(); })
+      btn('取消', 'quiet sm', function () { personaEditing = ''; personaDraft = null; releasePersonaTrial(); renderPrompts(); })
     ]);
     if (editingExisting) {
       actions.appendChild(btn('删除', 'quiet sm', function () {
         if (!window.confirm('删除人设「' + (draft.name || editingId) + '」？绑定到它的对话会回落到默认人设。')) return;
         personaAction({ action: 'delete', id: editingId }, '人设已删除').then(function (ok) {
-          if (ok) { personaEditing = ''; personaDraft = null; renderPrompts(); }
+          if (ok) { personaEditing = ''; personaDraft = null; releasePersonaTrial(); renderPrompts(); }
         });
       }));
     }
@@ -1709,7 +2039,7 @@
           personaOrder().forEach(function (id) {
             var item = personaById(id);
             var fav = Array.isArray(S.personaFavorites) && S.personaFavorites.indexOf(id) >= 0;
-            select.appendChild(el('option', { value: id, text: label + '：' + item.name + (fav ? ' ★' : '') }));
+            select.appendChild(el('option', { value: id, text: label + '：' + item.name + (fav ? '（收藏）' : '') }));
           });
           select.value = value;
           select.addEventListener('change', function () {
@@ -1742,7 +2072,7 @@
       });
     }
     // 手动指定对话（还没聊过也能预设）
-    var manual = el('input', { type: 'text', placeholder: '手动输入对话标识，例如 qqbot:1905346673:group:A6AB…', style: 'margin-top:12px' });
+    var manual = el('input', { type: 'text', placeholder: '手动输入对话标识，例如 qqbot:100001:group:OPENID…', style: 'margin-top:12px' });
     list.appendChild(el('div', { className: 'actions', style: 'margin-top:10px' }, [
       manual,
       btn('为这个对话设置', 'quiet sm', function () {
@@ -1771,7 +2101,7 @@
     select.textContent = '';
     lines.forEach(function (line) {
       var option = el('option', { value: line.kind });
-      option.textContent = (line.kind === 'qqbot' ? '官方线' : line.kind) + (line.connected === true ? '' : '（未连接）');
+      option.textContent = (line.kind === 'qqbot' ? '官方线' : line.kind === 'onebot' ? '个人线' : line.kind) + (line.connected === true ? '' : '（未连接）');
       select.appendChild(option);
     });
     if (lines.length === 0) {
@@ -1817,7 +2147,7 @@
   }
 
   function skippedLabel(value) {
-    return ({ disabled: '未启用', off: '关闭', 'not-group': '非群聊', mentioned: '@', 'not-chat': '非聊天模式', quiet: '安静时段', cooldown: '冷却', 'daily-limit': '日上限', 'chat-paused': '本群暂停', 'member-paused': '成员暂停', log: 'log 记录', 'low-score': '低分' })[value] || value || '—';
+    return ({ disabled: '未启用', off: '关闭', 'not-group': '非群聊', mentioned: '@', 'not-chat': '非聊天模式', quiet: '安静时段', cooldown: '冷却', 'daily-limit': '日上限', 'chat-paused': '本群暂停', 'member-paused': '成员暂停', log: 'log 记录', 'low-score': '低分', 'continuation-limit': '新话题接话次数已达上限', 'conversation-ended': '对话已结束', 'addressed-other': '正在对其他群友说话', 'not-mentioned': '没有被叫到', 'over-queue': '等待消息已满', 'reply-self': '引用了机器人', continuation: '继续当前对话', alias: '昵称呼唤', question: '疑问句', length: '消息长度', media: '附带图片或文件', 'at-others': '提到了其他人', 'reply-other': '引用了其他人' })[value] || value || '—';
   }
 
   function scheduleAction(id) {
@@ -1826,6 +2156,32 @@
       notice('定时任务已删除', 'info');
       load();
     }).catch(function (error) { notice(String(error.message || error), 'bad'); });
+  }
+
+  function renderDiagnostics(host) {
+    var data = S.diagnostics;
+    if (!data) return;
+    var statuses = { received: '已收到', queued: '等待处理', generating: '正在生成', sent: '已发送', ignored: '未回复', failed: '失败', cancelled: '已取消' };
+    var rows = Array.isArray(data.recent) ? data.recent.slice(-20).reverse() : [];
+    host.appendChild(el('div', { className: 'usage-panel-title', text: '消息处理记录', style: 'margin-top:16px' }));
+    host.appendChild(el('p', { className: 'hint', text: '显示处理状态、原因和等待时间，不保存聊天正文。展开一条记录可查看处理过程。' }));
+    if (!rows.length) host.appendChild(el('div', { className: 'empty', text: '还没有消息处理记录。收到新消息后会自动更新。' }));
+    rows.forEach(function (row) {
+      var active = ['received', 'queued', 'generating'].indexOf(row.status) >= 0;
+      var elapsed = active ? Date.now() - Number(row.at) : Number(row.durationMs);
+      var duration = Number.isFinite(elapsed) ? Math.max(0, elapsed / 1000).toFixed(1) + ' 秒' : '—';
+      var details = el('details', { className: 'diagnostic-row' });
+      details.open = diagnosticOpen[row.id] === true;
+      details.appendChild(el('summary', {}, [
+        pill(statuses[row.status] || row.status || '未知', row.status === 'failed' ? 'bad' : row.status === 'sent' ? 'ok' : active ? 'live' : 'neutral', false),
+        el('span', { text: ' ' + promptLabel(row.chatKey).label + ' · ' + fmtTime(row.at) + ' · ' + (active ? '已等待 ' : '耗时 ') + duration + (row.reason ? ' · ' + skippedLabel(row.reason) : '') })
+      ]));
+      var steps = el('ol');
+      (row.steps || []).forEach(function (step) { steps.appendChild(el('li', { text: fmtTime(step.at) + ' · ' + (statuses[step.status] || step.status || '处理中') + (step.reason ? ' · ' + skippedLabel(step.reason) : '') })); });
+      details.appendChild(steps);
+      details.addEventListener('toggle', function () { diagnosticOpen[row.id] = details.open; });
+      host.appendChild(details);
+    });
   }
 
   function renderChatControl() {
@@ -1845,7 +2201,7 @@
           host.appendChild(el('div', { className: 'group-row' }, [
             el('div', { className: 'grow' }, [
               el('div', { className: 'name', text: fmtTime(row.at) + ' · ' + promptLabel(row.chatKey).label }),
-              el('div', { className: 'sub', text: 'score ' + Number(row.score).toFixed(2) + ' · ' + (row.wake ? '唤醒' : skippedLabel(row.skipped)) + (row.reasons.length ? ' · ' + row.reasons.join(' / ') : '') })
+              el('div', { className: 'sub', text: 'score ' + Number(row.score).toFixed(2) + ' · ' + (row.wake ? '唤醒' : skippedLabel(row.skipped)) + (row.reasons.length ? ' · ' + row.reasons.map(skippedLabel).join(' / ') : '') })
             ])
           ]));
         });
@@ -1854,20 +2210,34 @@
       host.appendChild(el('div', { className: 'empty', text: '参与判断未装配。' }));
     }
 
+    renderDiagnostics(host);
     var keys = Array.isArray(S.chatKeys) ? S.chatKeys.slice() : [];
     var prefs = S.preferences || {};
     var chats = prefs.chats || {};
     Object.keys(chats).forEach(function (key) { if (keys.indexOf(key) < 0) keys.push(key); });
     host.appendChild(el('div', { className: 'usage-panel-title', text: '对话偏好 / 静默', style: 'margin-top:16px' }));
+    host.appendChild(el('p', { className: 'hint', text: '活跃档位影响新话题接话和表情倾向，正常续聊不受新话题预算限制。继承时使用人设或全局档位；明确静默设置优先。' }));
     if (keys.length === 0) host.appendChild(el('div', { className: 'empty', text: '还没有已知对话。' }));
     keys.forEach(function (key) {
       var pref = chats[key] || { proactiveUntil: 0, stickers: true };
       var paused = Number(pref.proactiveUntil) > Date.now();
+      var behavior = (S.behaviors || {})[key] || {};
+      var activity = activitySelect(pref.activity, promptLabel(key).label + '活跃档位');
+      activity.style.width = '120px';
+      activity.addEventListener('change', function () {
+        activity.disabled = true;
+        api('/dsh-qq/api/preferences', { action: 'activity', chatKey: key, activity: activity.value }).then(function (res) {
+          if (!res.data || res.data.ok !== true) throw new Error((res.data && res.data.error) || '档位保存失败');
+          notice('本群活跃档位已更新', 'info'); load();
+        }).catch(function (error) { activity.value = pref.activity || 'inherit'; notice(String(error.message || error), 'bad'); }).finally(function () { activity.disabled = false; });
+      });
       host.appendChild(el('div', { className: 'group-row', style: 'flex-wrap:wrap;gap:8px' }, [
         el('div', { className: 'grow' }, [
           el('div', { className: 'name', text: promptLabel(key).label }),
           el('div', { className: 'sub mono', text: key })
         ]),
+        activity,
+        el('span', { className: 'hint', text: '生效：' + activityLabel(behavior.activity) + '（' + ({ chat: '本群设置', persona: '人设默认', global: '全局默认' }[behavior.source] || '继承默认') + '）' }),
         pill(paused ? '主动暂停到 ' + fmtTime(pref.proactiveUntil) : '主动开启', paused ? 'warn' : 'ok', false),
         pill(pref.stickers === false ? '表情关闭' : '表情开启', pref.stickers === false ? 'warn' : 'ok', false),
         btn('暂停1h', 'quiet sm', function () { preferenceAction({ action: 'pause', chatKey: key, minutes: 60 }, '已暂停 1 小时'); }),
@@ -1945,6 +2315,8 @@
   var stickerError = '';
   var stickerLegacy = false;
   var stickerFocus = '';
+  var stickerMissingDescription = false;
+  var stickerEditors = {};
 
   // Match the grid's 150px minimum card width and 12px gap; two rows per page.
   if (typeof ResizeObserver === 'function') {
@@ -1953,7 +2325,8 @@
       if (width <= 0) return;
       var columns = Math.max(1, Math.min(50, Math.floor((width + 12) / 162)));
       if (columns === stickerColumns) return;
-      stickerPage = Math.floor(stickerPage * stickerColumns / columns);
+      var editingIndex = stickerPageData ? stickerPageData.items.findIndex(function (item) { return Boolean(stickerEditors[item.id]); }) : -1;
+      stickerPage = Math.floor((stickerPage * stickerColumns * 2 + Math.max(0, editingIndex)) / (columns * 2));
       stickerColumns = columns;
       stickerPageData = null;
       if (S) renderStickers();
@@ -1968,11 +2341,11 @@
     stickerLoading = true;
     stickerError = '';
     renderStickers(false);
-    api('/dsh-qq/api/stickers?filter=' + filter + '&page=' + stickerPage + '&pageSize=' + size).then(function (res) {
+    api('/dsh-qq/api/stickers?filter=' + filter + '&page=' + stickerPage + '&pageSize=' + size + (stickerMissingDescription ? '&missingDescription=1' : '')).then(function (res) {
       if (request !== stickerRequest) return;
       if (res.status === 404 || res.status === 405) {
         // The HTML refreshes before an older backend reloads: keep its loaded images usable.
-        var items = ((S.stickers && S.stickers.items) || []).filter(function (item) { return filter === 'all' || item.state === filter; });
+        var items = ((S.stickers && S.stickers.items) || []).filter(function (item) { return (filter === 'all' || item.state === filter) && (!stickerMissingDescription || !String(item.desc || '').trim()); });
         var page = Math.min(stickerPage, Math.max(0, Math.ceil(items.length / size) - 1));
         stickerPageData = { items: items.slice(page * size, (page + 1) * size), total: items.length, page: page, pageSize: size };
         stickerLegacy = true;
@@ -2002,11 +2375,54 @@
     }).catch(function (error) { notice(String(error.message || error), 'bad'); });
   }
 
+  function stickerEditor(item) {
+    if (stickerEditors[item.id]) return stickerEditors[item.id].node;
+    var draft = { desc: item.desc || '', tags: (item.tags || []).join(' '), busy: false };
+    var box = el('div', { className: 'sticker-editor' });
+    draft.node = box;
+    stickerEditors[item.id] = draft;
+    var tags = el('input', { type: 'text', id: 'sticker-tags-' + item.id, name: 'sticker-tags', autocomplete: 'off', value: draft.tags, 'aria-label': '图片用途标签' });
+    var desc = el('textarea', { id: 'sticker-desc-' + item.id, name: 'sticker-desc', maxlength: 300, rows: 4, 'aria-label': '图片画面描述', placeholder: '描述角色、动作、表情和图中文字…' });
+    desc.value = draft.desc;
+    tags.addEventListener('input', function () { draft.tags = tags.value; });
+    desc.addEventListener('input', function () { draft.desc = desc.value; });
+    var error = el('div', { className: 'persona-status bad', role: 'status', 'aria-live': 'polite' });
+    var save = btn('保存说明', 'sm', function () {
+      if (draft.busy) return;
+      draft.busy = true; save.disabled = true; cancel.disabled = true; tags.disabled = true; desc.disabled = true; error.textContent = '正在保存…';
+      api('/dsh-qq/api/stickers', { action: 'tag', id: item.id, desc: draft.desc, tags: draft.tags.split(/[\s,，]+/).filter(Boolean) }).then(function (res) {
+        if (!res.data || res.data.ok !== true) throw new Error((res.data && res.data.error) || '保存失败，请重试。');
+        delete stickerEditors[item.id]; notice('图片说明已保存', 'info'); load();
+      }).catch(function (failure) { error.textContent = String(failure.message || failure); }).finally(function () {
+        draft.busy = false; save.disabled = false; cancel.disabled = false; tags.disabled = false; desc.disabled = false;
+      });
+    });
+    var cancel = btn('取消编辑', 'quiet sm', function () { delete stickerEditors[item.id]; renderStickers(false); });
+    box.appendChild(el('label', { for: tags.id, className: 'hint', text: '用途标签（空格或逗号分隔）' }));
+    box.appendChild(tags);
+    box.appendChild(el('label', { for: desc.id, className: 'hint', text: '画面描述（最多 300 字）' }));
+    box.appendChild(desc); box.appendChild(error); box.appendChild(el('div', { className: 'actions' }, [save, cancel]));
+    return box;
+  }
+
+  function stickerTaggingText(tagging) {
+    if (!tagging) return '';
+    return (tagging.running ? '正在识别' : '识别进度') + ' · 等待 ' + (tagging.pending || 0) + ' · 完成 ' + (tagging.completed || 0) + ' · 失败 ' + (tagging.failed || 0) + (tagging.lastError ? ' · ' + tagging.lastError : '');
+  }
+
   function renderStickers(refresh) {
     var host = document.getElementById('stickers');
     if (!host) return;
+    // Polling must not detach an open editor, including during IME composition.
+    if (refresh === 'poll' && Object.keys(stickerEditors).length) {
+      var progress = document.getElementById('sticker-tagging-status');
+      if (progress) progress.textContent = stickerTaggingText(S.stickers && S.stickers.tagging);
+      return;
+    }
     if (refresh !== false && S && S.stickers) { loadStickerPage(); return; }
-    var focused = host.contains(document.activeElement) ? document.activeElement.id : '';
+    var active = host.contains(document.activeElement) ? document.activeElement : null;
+    var selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
+    var focused = active ? active.id : '';
     if (focused) stickerFocus = focused;
     host.textContent = '';
     host.setAttribute('aria-busy', stickerLoading ? 'true' : 'false');
@@ -2024,10 +2440,13 @@
     if (note) note.textContent = '候选 ' + (counts.candidates || 0) + ' · 收藏 ' + (counts.library || 0) + ' · 回收站 ' + (counts.trash || 0) + ' · ' + Math.round((counts.bytes || 0) / 1024) + ' KB';
     host.appendChild(el('div', { className: 'hint', style: 'margin-bottom:10px', text: '自动收藏的是群/私聊里的所有图片，不区分表情包和截图；候选不会自动发。请用标签/收藏整理，不是表情包的丢回收站。' }));
     if (S.config && S.config.stickers && S.config.stickers.vision && S.config.stickers.vision.enabled !== false) {
-      host.appendChild(btn('补打标签（已入库的旧图）', 'quiet sm', function () {
-        stickerAction({ action: 'tagPending', limit: 20 }, '正在排队补打标签，稍后刷新');
+      host.appendChild(el('p', { className: 'hint', text: '补全与重新识别会调用已配置的视觉模型并产生用量；只更新图库说明，不会发送到 QQ。' }));
+      host.appendChild(btn('补全缺失说明（最多 20 张）', 'quiet sm', function () {
+        stickerAction({ action: 'tagPending', limit: 20 }, '已安排补全，进度会自动更新');
       }));
     }
+    var tagging = data.tagging;
+    host.appendChild(el('div', { id: 'sticker-tagging-status', className: 'persona-status' + (tagging && tagging.lastError ? ' bad' : ''), role: 'status', 'aria-live': 'polite', text: stickerTaggingText(tagging) }));
     var tabs = el('div', { className: 'actions', style: 'margin-bottom:10px;flex-wrap:wrap' });
     [['all', '全部'], ['candidate', '待整理'], ['library', '收藏'], ['trash', '回收站']].forEach(function (pair) {
       var count = pair[0] === 'all' ? counts.total : pair[0] === 'candidate' ? counts.candidates : counts[pair[0]];
@@ -2041,6 +2460,9 @@
       tab.setAttribute('aria-pressed', String(stickerFilter === pair[0]));
       tabs.appendChild(tab);
     });
+    var missingToggle = el('input', { type: 'checkbox', checked: stickerMissingDescription });
+    missingToggle.addEventListener('change', function () { stickerMissingDescription = missingToggle.checked; stickerPage = 0; stickerPageData = null; renderStickers(); });
+    tabs.appendChild(el('label', { className: 'hint', style: 'display:flex;align-items:center;gap:6px;cursor:pointer' }, [missingToggle, el('span', { text: '只看缺描述' })]));
     host.appendChild(tabs);
     if (stickerLegacy) host.appendChild(el('p', { className: 'hint', text: '当前仅显示旧后端已加载的图片；重载插件或重启 DSH 后，可翻阅完整图库。' }));
     if (stickerError) host.appendChild(el('div', { role: 'alert', className: 'actions' }, [
@@ -2060,6 +2482,7 @@
       card.appendChild(img);
       card.appendChild(el('div', { className: 'sub mono', style: 'margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: item.id, text: item.id.slice(0, 16) + '…' }));
       card.appendChild(el('div', { className: 'sub', style: 'min-height:18px', text: item.tags.join(' / ') || '无标签' }));
+      card.appendChild(el('div', { className: 'sticker-description', text: item.desc || '缺少画面描述，选图时可能不准确。' }));
       var source = item.sourceText || (item.sourceName ? item.sourceName + ' 发' : (item.sourceAt ? '群聊图片' : '未知'));
       card.appendChild(el('div', { className: 'hint', style: 'min-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: source, text: '来源：' + source }));
       var actions = el('div', { className: 'actions', style: 'margin-top:6px;gap:4px;flex-wrap:wrap' });
@@ -2067,15 +2490,13 @@
       if (item.state === 'trash') actions.appendChild(btn('恢复', 'sm', function () { stickerAction({ action: 'restore', id: item.id }, '已恢复到候选'); }));
       if (item.state === 'candidate') actions.appendChild(btn('不是表情包', 'quiet sm', function () { stickerAction({ action: 'trash', id: item.id }, '已移入回收站'); }));
       else if (item.state !== 'trash') actions.appendChild(btn('回收站', 'quiet sm', function () { stickerAction({ action: 'trash', id: item.id }, '已移入回收站'); }));
-      actions.appendChild(btn('标签', 'quiet sm', function () {
-        var tags = window.prompt('标签（空格/逗号分隔）', item.tags.join(' '));
-        if (tags === null) return;
-        stickerAction({ action: 'tag', id: item.id, tags: tags.split(/[\s,，]+/).filter(Boolean) }, '标签已更新');
-      }));
+      actions.appendChild(btn('编辑说明', 'quiet sm', function () { stickerEditor(item); renderStickers(false); var field = document.getElementById('sticker-desc-' + item.id); if (field) field.focus(); }));
+      if (item.state !== 'trash') actions.appendChild(btn('重新识别', 'quiet sm', function () { stickerAction({ action: 'retag', id: item.id }, '已安排重新识别，会调用视觉模型'); }));
       actions.appendChild(btn('删除', 'quiet sm', function () {
         if (window.confirm('彻底删除这张图？')) stickerAction({ action: 'delete', id: item.id }, '已删除');
       }));
       card.appendChild(actions);
+      if (stickerEditors[item.id]) card.appendChild(stickerEditors[item.id].node);
       grid.appendChild(card);
     });
     host.appendChild(grid);
@@ -2089,10 +2510,10 @@
       pager.appendChild(button);
     });
     host.appendChild(pager);
-    if (!stickerLoading && stickerFocus && (document.activeElement === document.body || host.contains(document.activeElement))) {
+    if (stickerFocus && (document.activeElement === document.body || host.contains(document.activeElement))) {
       var restoreFocus = document.getElementById(stickerFocus);
       if (restoreFocus && restoreFocus.disabled) restoreFocus = document.getElementById(stickerPage > 0 ? 'sticker-prev' : 'sticker-filter-all');
-      if (restoreFocus) restoreFocus.focus({ preventScroll: true });
+      if (restoreFocus) { restoreFocus.focus({ preventScroll: true }); if (selection && restoreFocus.setSelectionRange) restoreFocus.setSelectionRange(selection[0], selection[1]); }
     }
     if (!stickerLoading) stickerFocus = '';
   }
@@ -2102,9 +2523,9 @@
     host.textContent = '';
     var groups = [
       { id: 'identity', title: '身份与权限', desc: '陌生人策略、谁能对话、谁能用命令——安全相关的都放最前。' },
-      { id: 'chat', title: '连接与群聊', desc: '群聊策略与 Markdown 渲染。' },
+      { id: 'chat', title: '连接与群聊', desc: 'WS 地址、限速、群里何时回复、Markdown 渲染。' },
       { id: 'model', title: '模型与语音', desc: '渠道默认模型（留空跟随 DSH 全局）、群记忆容量、外部语音转写。' },
-      { id: 'advanced', title: '高级', desc: '自动连接、工作目录、各类超时与上限。' }
+      { id: 'advanced', title: '高级', desc: '自动连接、工作目录、各类超时与上限、NapCat WebUI 地址。' }
     ];
     groups.forEach(function (group) {
       var block = el('div', { className: 'cfg-col' });
@@ -2126,7 +2547,7 @@
     host.textContent = '';
     var specs = S.config && Array.isArray(S.config.transports) ? S.config.transports : [];
     if (specs.length === 0) return;
-    var labels = { qqbot: '官方 QQBot', mock: 'Mock（调试）' };
+    var labels = { qqbot: '官方 QQBot', onebot: '个人号 OneBot', mock: 'Mock（调试）' };
     specs.forEach(function (spec) {
       var enabled = spec.enabled !== false;
       var input = el('input', { type: 'checkbox', checked: enabled });
@@ -2220,6 +2641,21 @@
 
   function fieldNode(field) {
     var value = currentValue(field);
+    if (field.dynamic) {
+      var dynamicNode = dynamicSelect(field, value);
+      if (dynamicNode !== null) {
+        var catalog = modelCatalogOf();
+        var extraHelp = field.dynamic === 'provider' && catalog && catalog.globalDefault
+          ? '（DSH 全局默认：' + catalog.globalDefault.provider + '/' + catalog.globalDefault.model + '）'
+          : '';
+        return el('div', { className: 'field' }, [
+          el('label', { text: field.label }),
+          dynamicNode,
+          field.help || extraHelp ? el('div', { className: 'help', text: (field.help || '') + (extraHelp ? ' ' + extraHelp : '') }) : null
+        ]);
+      }
+      // 目录不可用时退回普通文本输入（下面复用原逻辑）
+    }
     if (field.type === 'boolean') {
       var input = el('input', { type: 'checkbox', checked: value === true });
       input.addEventListener('change', function () { setDirty(field.path, input.checked); });
@@ -2280,9 +2716,6 @@
       host.appendChild(el('div', { className: 'usage-empty', text: '还没有 token 记录：机器人在 QQ 里完成回复后，这里会按天累计输入/输出 token。' }));
       return;
     }
-    var pricing = (S.config && S.config.pricing) || {};
-    var cost = Number(pricing.inputPerMillion || 0) * totals.input / 1e6 + Number(pricing.outputPerMillion || 0) * totals.output / 1e6;
-    var costText = cost > 0 ? '约 ¥' + cost.toFixed(2) : '';
     if (note) note.textContent = '保留 ' + (usage.span || 30) + ' 天';
 
     var count = usageRangeCount();
@@ -2313,6 +2746,7 @@
     var pricing = (S.config && S.config.pricing) || {};
     var cost = Number(pricing.inputPerMillion || 0) * totals.input / 1e6 + Number(pricing.outputPerMillion || 0) * totals.output / 1e6;
     var costText = cost > 0 ? '约 ¥' + cost.toFixed(2) : '';
+    if (note) note.textContent = '保留 ' + (usage.span || 30) + ' 天' + (costText !== '' ? ' · ' + costText : '');
     [['总消耗', totals.total, 'tok'], ['输入', totals.input, 'tok'], ['输出', totals.output, 'tok'], ['回复条数', totals.turns, '条']].forEach(function (item) {
       kpis.appendChild(el('div', { className: 'usage-kpi' }, [
         el('div', { className: 'k', text: item[0] }),
@@ -2370,25 +2804,38 @@
   function renderActivity() {
     var host = document.getElementById('activity');
     host.textContent = '';
-    var list = (S.connections && S.connections.qqbot) || [];
-    document.getElementById('activity-note').textContent = list.length === 0 ? '暂无活动' : list.length + ' 个对话';
-    if (list.length === 0) {
-      host.appendChild(el('div', { className: 'empty', text: '还没有对话。' }));
-      return;
-    }
-    var rows = el('div', { className: 'rows' });
-    list.forEach(function (entry) {
-      var target = entry.targetKind === 'group' ? ('群 ' + entry.targetId) : ('私聊 ' + (entry.targetId.length > 10 ? entry.targetId.slice(0, 10) + '…' : entry.targetId));
-      rows.appendChild(el('div', { className: 'row' }, [
-        el('span', { className: 'ico', html: ICONS[entry.targetKind === 'group' ? 'community' : 'dm'] }),
-        el('div', { className: 'grow' }, [
-          el('div', { className: 'name', text: target }),
-          el('div', { className: 'sub', text: (entry.sessionId ? '会话 ' + entry.sessionId.slice(0, 12) + '…' : '无会话') + ' · ' + entry.sessions + ' 条' })
-        ]),
-        el('span', { className: 'right', text: relTime(entry.updatedAt) })
+    var total = 0;
+    var grid = el('div', { className: 'activity-grid' });
+    ['qqbot', 'onebot'].forEach(function (kind) {
+      var route = S.routes[kind];
+      var list = (S.connections && S.connections[kind]) || [];
+      total += list.length;
+      var block = el('div', {});
+      block.appendChild(el('div', { style: 'display:flex;align-items:center;gap:7px;margin-bottom:6px' }, [
+        el('span', { style: 'color:var(--muted);display:grid', html: ICONS[kind === 'onebot' ? 'community' : 'dm'] }),
+        el('span', { style: 'font-size:12.5px;font-weight:600', text: route.label })
       ]));
+      if (list.length === 0) {
+        block.appendChild(el('div', { style: 'font-size:12px;color:var(--muted);padding:8px 0 12px', text: '还没有对话。' }));
+      } else {
+        var rows = el('div', { className: 'rows' });
+        list.forEach(function (entry) {
+          var target = entry.targetKind === 'group' ? ('群 ' + entry.targetId) : ('私聊 ' + (entry.targetId.length > 10 ? entry.targetId.slice(0, 10) + '…' : entry.targetId));
+          rows.appendChild(el('div', { className: 'row' }, [
+            el('span', { className: 'ico', html: ICONS[entry.targetKind === 'group' ? 'community' : 'dm'] }),
+            el('div', { className: 'grow' }, [
+              el('div', { className: 'name', text: target }),
+              el('div', { className: 'sub', text: (entry.sessionId ? '会话 ' + entry.sessionId.slice(0, 12) + '…' : '无会话') + ' · ' + entry.sessions + ' 条' })
+            ]),
+            el('span', { className: 'right', text: relTime(entry.updatedAt) })
+          ]));
+        });
+        block.appendChild(rows);
+      }
+      grid.appendChild(block);
     });
-    host.appendChild(rows);
+    document.getElementById('activity-note').textContent = total === 0 ? '暂无活动' : total + ' 个对话';
+    host.appendChild(grid);
   }
 
   /* ---------- runtime ---------- */
@@ -2399,17 +2846,21 @@
     var lines = Array.isArray(S.lines) ? S.lines : [];
     if (lines.length > 0) {
       lines.forEach(function (line) {
-        var label = line.kind === 'qqbot' ? '官方线' : line.kind;
+        var label = line.kind === 'qqbot' ? '官方线' : line.kind === 'onebot' ? '个人线' : line.kind;
         var state = line.connected === true ? '已连接' : '未连接（' + (line.phase || 'unknown') + '）';
         rows.push([label, state + (line.accountId ? ' · ' + line.accountId : '')]);
       });
       lines.filter(function (line) { return line.connected !== true && line.lastError; }).forEach(function (line) {
-        rows.push(['官方线错误', String(line.lastError).slice(0, 240)]);
+        rows.push([line.kind === 'qqbot' ? '官方线错误' : '个人线错误', String(line.lastError).slice(0, 240)]);
       });
     } else {
       var st = S.status || {};
       rows.push(['传输方式', S.config.transport]);
       rows.push(['连接相位', st.phase || '—']);
+    }
+    if (lines.some(function (line) { return line.kind === 'onebot'; })) {
+      rows.push(['引用消息窗口', '最近 500 条在内存里（更早的引用只能靠 get_msg 兜底）']);
+      rows.push(['合并转发', '只保留占位文本与 forward_id，不自动展开（避免全量归档）']);
     }
     rows.push(['数据目录', S.paths.dataDir]);
     rows.push(['状态文件', S.paths.store || '—']);
@@ -2475,12 +2926,13 @@
     renderStats();
     renderTrend();
     renderUsage();
+    renderNapcat();
     renderCredentials();
     renderIdentity();
     renderGroups();
     // 状态轮询（含已在途请求）不能替换打开的编辑器、草稿和光标。
     if (personaEditing === '') renderPrompts();
-    renderStickers();
+    renderStickers('poll');
     renderChatControl();
     renderRelations();
     renderConfig();
@@ -2508,12 +2960,11 @@
       renderStats();
       renderTrend();
       renderUsage();
+      renderNapcat();
       renderCredentials();
       renderIdentity();
-      renderGroups();
       renderActivity();
       renderReadonly();
-      renderTestMessage();
     }).catch(function (error) {
       var fresh = document.getElementById('fresh');
       fresh.className = 'top-fresh err';
@@ -2576,6 +3027,15 @@
       }
     }).catch(function (error) { notice('操作失败：' + error.message, ''); });
   }
+  function napcatAction(action) {
+    return api('/dsh-qq/api/napcat/action', { action: action }).then(function (res) {
+      if (!res.data.ok) throw new Error(res.data.error || '操作失败');
+      notice('NapCat：' + String(res.data.message || action + ' 完成').slice(0, 200), 'info');
+      setTimeout(load, 1500);
+      setTimeout(load, 4000);
+    }).catch(function (error) { notice('NapCat 操作失败：' + error.message, ''); });
+  }
+
   // Token 消耗：区间切换只重渲染这一块，不重新拉状态
   var usageRangeBox = document.getElementById('usage-range');
   if (usageRangeBox) {

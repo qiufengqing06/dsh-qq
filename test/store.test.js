@@ -135,41 +135,41 @@ test('身份按 transport 隔离：一条线的主人不会在另一条线上被
   const store = createStore({ dir })
   await store.load()
 
-  // 真机场景：个人线的 QQ 号 3298364424 是主人；官方线的 openid 是另一个人
-  await store.setHomeChannel('3298364424', 'mock')
-  await store.setHomeChannel('A6AB252127520117332879C06EE346AC', 'qqbot')
+  // 示例场景：个人线的 QQ 号 100004 是主人；官方线的 openid 是另一个人
+  await store.setHomeChannel('100004', 'onebot')
+  await store.setHomeChannel('EXAMPLE_OPENID', 'qqbot')
 
-  assert.equal(store.roleOf('3298364424', 'mock'), 'owner')
-  assert.equal(store.roleOf('A6AB252127520117332879C06EE346AC', 'qqbot'), 'owner')
+  assert.equal(store.roleOf('100004', 'onebot'), 'owner')
+  assert.equal(store.roleOf('EXAMPLE_OPENID', 'qqbot'), 'owner')
   // 关键回归：拿个人线的主人在官方线上判角色 → 不是主人（修复前这里是 owner，导致「我不就是管理？」被判陌生人/反过来也行不通）
-  assert.equal(store.roleOf('3298364424', 'qqbot'), 'everyone')
-  assert.equal(store.roleOf('A6AB252127520117332879C06EE346AC', 'mock'), 'everyone')
+  assert.equal(store.roleOf('100004', 'qqbot'), 'everyone')
+  assert.equal(store.roleOf('EXAMPLE_OPENID', 'onebot'), 'everyone')
 })
 
 test('身份隔离：授权记录带 transport 前缀，只对来源线生效', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-store-auth-'))
   const store = createStore({ dir })
   await store.load()
-  await store.addAuthorized('2081371760', { role: 'authorized', transportKind: 'mock' })
+  await store.addAuthorized('100005', { role: 'authorized', transportKind: 'onebot' })
 
-  assert.equal(store.roleOf('2081371760', 'mock'), 'authorized')
-  assert.equal(store.roleOf('2081371760', 'qqbot'), 'everyone')
-  assert.deepEqual(store.authorizedList('mock'), [{ id: '2081371760', role: 'authorized' }])
+  assert.equal(store.roleOf('100005', 'onebot'), 'authorized')
+  assert.equal(store.roleOf('100005', 'qqbot'), 'everyone')
+  assert.deepEqual(store.authorizedList('onebot'), [{ id: '100005', role: 'authorized' }])
   assert.deepEqual(store.authorizedList('qqbot'), [])
-  assert.equal(await store.removeAuthorized('2081371760', 'mock'), true)
-  assert.equal(store.roleOf('2081371760', 'mock'), 'everyone')
+  assert.equal(await store.removeAuthorized('100005', 'onebot'), true)
+  assert.equal(store.roleOf('100005', 'onebot'), 'everyone')
 })
 
-test('旧数据迁移：无前缀的 homeChannel/roles 归到 qqbot', async () => {
+test('旧数据迁移：无前缀的 homeChannel/roles 按 id 形态归到 onebot/qqbot', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-store-mig-'))
-  // 模拟旧版 store：全局 homeChannel=QQ号，roles 也是裸 id。本仓库只有官方线，统一归 qqbot。
+  // 模拟旧版 store：全局 homeChannel=QQ号，roles 也是裸 id
   await writeFile(
     join(dir, 'store.v1.json'),
     JSON.stringify({
       version: 1,
       chats: {},
-      pairing: { policy: 'pairing', roles: { '2081371760': 'authorized', A6AB252127520117332879C06EE346AC: 'authorized' }, pending: [] },
-      meta: { homeChannel: '3298364424', accountId: '', updatedAt: 0 },
+      pairing: { policy: 'pairing', roles: { '100005': 'authorized', EXAMPLE_OPENID: 'authorized' }, pending: [] },
+      meta: { homeChannel: '100004', accountId: '', updatedAt: 0 },
     }),
     'utf8',
   )
@@ -177,12 +177,12 @@ test('旧数据迁移：无前缀的 homeChannel/roles 归到 qqbot', async () =
   await store.load()
 
   const snapshot = store.snapshot()
-  assert.deepEqual(snapshot.meta.homeChannels, { qqbot: '3298364424' })
-  assert.equal(snapshot.pairing.roles['qqbot:2081371760'], 'authorized', '旧的无前缀记录归 qqbot')
-  assert.equal(snapshot.pairing.roles['qqbot:A6AB252127520117332879C06EE346AC'], 'authorized')
-  assert.equal(snapshot.pairing.roles['2081371760'], undefined, '旧的无前缀记录要迁走')
-  assert.equal(store.roleOf('3298364424', 'qqbot'), 'owner')
-  assert.equal(store.roleOf('A6AB252127520117332879C06EE346AC', 'qqbot'), 'authorized')
+  assert.deepEqual(snapshot.meta.homeChannels, { onebot: '100004' })
+  assert.equal(snapshot.pairing.roles['onebot:100005'], 'authorized', '纯数字归 onebot')
+  assert.equal(snapshot.pairing.roles['qqbot:EXAMPLE_OPENID'], 'authorized', 'openid 归 qqbot')
+  assert.equal(snapshot.pairing.roles['100005'], undefined, '旧的无前缀记录要迁走')
+  assert.equal(store.roleOf('100004', 'onebot'), 'owner')
+  assert.equal(store.roleOf('EXAMPLE_OPENID', 'qqbot'), 'authorized')
 })
 
 test('活动计数：按天按线路累加、近 7 天补零、重启后不丢', async () => {
@@ -191,15 +191,16 @@ test('活动计数：按天按线路累加、近 7 天补零、重启后不丢',
   await store.load()
 
   await store.recordActivity('qqbot')
-  await store.recordActivity('qqbot')
-  await store.recordActivity('qqbot')
+  await store.recordActivity('onebot')
+  await store.recordActivity('onebot')
   await store.recordActivity('')  // 空 kind 忽略
 
   const series = store.activity(7)
   assert.equal(series.length, 7)
   const today = series.at(-1)
   assert.equal(typeof today.date, 'string')
-  assert.equal(today.qqbot, 3)
+  assert.equal(today.qqbot, 1)
+  assert.equal(today.onebot, 2)
   assert.equal(series[0].qqbot, 0, '没有活动的历史天补 0')
 
   // 重启后仍在
@@ -221,7 +222,6 @@ test('活动计数：超过保留天数的旧记录在写入时被裁掉', async
   assert.ok(store.snapshot().activity[Object.keys(store.snapshot().activity)[0]].qqbot >= 1)
 })
 
-
 // ── token 用量：按对话/按天记账 + 30 天报表 ──
 
 test('token 用量：按对话按天累计，报表给出今日/近7天/近30天合计与排序', async () => {
@@ -229,9 +229,9 @@ test('token 用量：按对话按天累计，报表给出今日/近7天/近30天
   const store = createStore({ dir })
   await store.load()
 
-  await store.recordUsage('qqbot:1905346673:dm:user-a', { inputTokens: 100, outputTokens: 40, totalTokens: 140 })
-  await store.recordUsage('qqbot:1905346673:dm:user-a', { inputTokens: 10, outputTokens: 5 })
-  await store.recordUsage('mock:10001:group:90001', { promptTokens: 200, completionTokens: 50 })
+  await store.recordUsage('qqbot:100001:dm:user-a', { inputTokens: 100, outputTokens: 40, totalTokens: 140 })
+  await store.recordUsage('qqbot:100001:dm:user-a', { inputTokens: 10, outputTokens: 5 })
+  await store.recordUsage('onebot:100002:group:100003', { promptTokens: 200, completionTokens: 50 })
   assert.equal(await store.recordUsage('', { totalTokens: 1 }), null, '空 chatKey 忽略')
   assert.equal(await store.recordUsage('qqbot:x', {}), null, '没有用量的 usage 忽略')
 
@@ -241,13 +241,14 @@ test('token 用量：按对话按天累计，报表给出今日/近7天/近30天
   assert.deepEqual(report.totals.today, { total: 405, input: 310, output: 95, turns: 3 })
   assert.equal(report.totals.week.total, 405, '只用今天的数据时 7 天 = 今天')
   assert.equal(report.totals.month.total, 405)
-  assert.deepEqual(report.chats.map(row => row.chatKey).slice(0, 2), [
-    'mock:10001:group:90001',
-    'qqbot:1905346673:dm:user-a',
+  assert.deepEqual(report.chats.map(row => row.chatKey), [
+    'onebot:100002:group:100003',
+    'qqbot:100001:dm:user-a',
   ], '按总消耗降序')
   assert.equal(report.chats[1].turns, 2)
   assert.equal(report.chats[0].days[report.days.at(-1).date].total, 250)
 
+  // 重启后不丢
   const reloaded = createStore({ dir })
   await reloaded.load()
   assert.equal(reloaded.usageReport({ days: 30 }).totals.today.total, 405)
@@ -268,7 +269,7 @@ test('token 用量：超过保留天数的旧记录在写入时裁掉', async ()
   const store = createStore({ dir })
   await store.load()
   for (let index = 0; index < 40; index += 1) {
-    await store.recordUsage('qqbot:1905346673:dm:user-a', { totalTokens: 1 })
+    await store.recordUsage('qqbot:100001:dm:user-a', { totalTokens: 1 })
   }
   assert.equal(store.snapshot().usage[oldKey], undefined, '60 天前的用量应被裁掉')
 })
@@ -336,30 +337,30 @@ test('会话提示词：默认/按对话覆盖/清除/长度上限/重启不丢'
   const store = createStore({ dir })
   await store.load()
   assert.equal(store.defaultPrompt(), '')
-  assert.equal(store.promptFor('qqbot:1:group:2'), '')
+  assert.equal(store.promptFor('onebot:1:group:2'), '')
   assert.deepEqual(store.promptChats(), {})
 
   await store.setDefaultPrompt('你是群助手，回答简短。')
-  assert.equal(store.promptFor('qqbot:1:group:2'), '你是群助手，回答简短。')
-  await store.setChatPrompt('qqbot:1:group:2', '这个群只聊技术。')
-  assert.equal(store.promptFor('qqbot:1:group:2'), '这个群只聊技术。', '对话覆盖优先于默认')
-  assert.equal(store.promptFor('qqbot:1:dm:9'), '你是群助手，回答简短。', '其它对话回落到默认')
-  assert.deepEqual(store.promptChats(), { 'qqbot:1:group:2': '这个群只聊技术。' })
+  assert.equal(store.promptFor('onebot:1:group:2'), '你是群助手，回答简短。')
+  await store.setChatPrompt('onebot:1:group:2', '这个群只聊技术。')
+  assert.equal(store.promptFor('onebot:1:group:2'), '这个群只聊技术。', '对话覆盖优先于默认')
+  assert.equal(store.promptFor('onebot:1:dm:9'), '你是群助手，回答简短。', '其它对话回落到默认')
+  assert.deepEqual(store.promptChats(), { 'onebot:1:group:2': '这个群只聊技术。' })
 
   // 空文本 = 清除覆盖
-  await store.setChatPrompt('qqbot:1:group:2', '')
-  assert.equal(store.promptFor('qqbot:1:group:2'), '你是群助手，回答简短。')
+  await store.setChatPrompt('onebot:1:group:2', '')
+  assert.equal(store.promptFor('onebot:1:group:2'), '你是群助手，回答简短。')
   assert.deepEqual(store.promptChats(), {})
 
   await assert.rejects(() => store.setDefaultPrompt('x'.repeat(4001)), /太长/)
-  await assert.rejects(() => store.setChatPrompt('qqbot:1:group:2', 'x'.repeat(4001)), /太长/)
+  await assert.rejects(() => store.setChatPrompt('onebot:1:group:2', 'x'.repeat(4001)), /太长/)
   await assert.rejects(() => store.setChatPrompt('', 'x'), /不能为空/)
 
-  await store.setChatPrompt('qqbot:1:group:2', '持久化')
+  await store.setChatPrompt('onebot:1:group:2', '持久化')
   const reloaded = createStore({ dir })
   await reloaded.load()
   assert.equal(reloaded.defaultPrompt(), '你是群助手，回答简短。')
-  assert.equal(reloaded.promptFor('qqbot:1:group:2'), '持久化')
+  assert.equal(reloaded.promptFor('onebot:1:group:2'), '持久化')
 })
 
 // ── 命名人设库 + 对话绑定 ──
@@ -402,6 +403,8 @@ test('人设库：保存/默认/绑定/解绑，生效来源可追踪', async ()
     personaId: 'tech',
     personaName: '技术顾问',
     stickerIds: [],
+    aliases: [],
+    activity: 'inherit',
   })
 
   await store.bindPersona(chatKey, 'cute')
@@ -647,7 +650,7 @@ test('明确偏好/静默：对话暂停、表情开关、成员称呼/主动暂
   const s = createStore({ dir })
   await s.load()
   const chatKey = 'qqbot:1:group:2'
-  assert.deepEqual(s.chatPreference(chatKey), { proactiveUntil: 0, stickers: true })
+  assert.deepEqual(s.chatPreference(chatKey), { proactiveUntil: 0, stickers: true, activity: 'inherit' })
   await s.setChatPreference(chatKey, { proactiveUntil: 123456, stickers: false })
   assert.equal(s.chatPreference(chatKey).proactiveUntil, 123456)
   assert.equal(s.chatPreference(chatKey).stickers, false)
@@ -659,4 +662,78 @@ test('明确偏好/静默：对话暂停、表情开关、成员称呼/主动暂
   const reopened = createStore({ dir })
   await reopened.load()
   assert.equal(reopened.chatPreference(chatKey).stickers, false)
+})
+
+
+test('人设昵称与活跃档位：旧更新保留新字段，严格写入不部分修改，重载兼容', async () => {
+  const dir = await tempDir()
+  const store = createStore({ dir })
+  await store.load()
+  const saved = await store.setPersona('fish', { text: '日常聊天', aliases: [' 鱼鱼 ', '鱼鱼', '大肥鱼'], activity: 'active' })
+  assert.deepEqual(saved.aliases, ['鱼鱼', '大肥鱼'])
+  saved.aliases.push('外部篡改')
+  await store.setPersona('fish', { text: '更新文案' })
+  assert.deepEqual(store.personaOf('fish').aliases, ['鱼鱼', '大肥鱼'])
+  assert.equal(store.personaOf('fish').activity, 'active')
+  const before = store.personaOf('fish')
+  for (const patch of [{ aliases: '鱼鱼' }, { aliases: ['鱼'] }, { aliases: ['鱼\n鱼'] }, { activity: null }, { activity: 'very-active' }]) {
+    await assert.rejects(store.setPersona('fish', { text: '不能写入', ...patch }))
+    assert.deepEqual(store.personaOf('fish'), before)
+  }
+  const reloaded = createStore({ dir })
+  await reloaded.load()
+  assert.deepEqual(reloaded.personaOf('fish'), before)
+  await reloaded.setPersona('fish', { text: '重置', aliases: [], activity: 'inherit' })
+  assert.deepEqual(reloaded.personaOf('fish').aliases, [])
+  assert.equal(reloaded.personaOf('fish').activity, 'inherit')
+})
+
+test('生效行为按群覆盖/生效人设/全局继承解析，草稿预演完全只读', async () => {
+  const dir = await tempDir()
+  const store = createStore({ dir })
+  await store.load()
+  const key = 'onebot:1:group:g1', other = 'onebot:1:group:g2'
+  await store.setPersona('global', { text: '默认', aliases: ['小鱼'], activity: 'quiet' })
+  await store.setPersona('fish', { text: '群人设', aliases: ['鱼鱼'], activity: 'active' })
+  await store.setDefaultPersona('global')
+  await store.bindPersona(key, 'fish', 'chat')
+  assert.deepEqual(store.effectiveBehaviorFor(key), { aliases: ['鱼鱼'], activity: 'active', source: 'persona' })
+  assert.deepEqual(store.effectiveBehaviorFor(key, 'work'), { aliases: ['小鱼'], activity: 'quiet', source: 'persona' })
+  await store.setChatPreference(key, { activity: 'normal' })
+  const revision = store.promptRevision()
+  await store.setChatPreference(key, { stickers: false })
+  assert.equal(store.promptRevision(), revision, '其他偏好更新不变更活跃档位')
+  assert.deepEqual(store.effectiveBehaviorFor(key), { aliases: ['鱼鱼'], activity: 'normal', source: 'chat' })
+  assert.deepEqual(store.effectiveBehaviorFor(other), { aliases: ['小鱼'], activity: 'quiet', source: 'persona' })
+  const snapshot = store.snapshot()
+  const draft = { aliases: [' 草稿鱼 ', '草稿鱼'], activity: 'active' }
+  assert.deepEqual(store.effectiveBehaviorFor(key, 'chat', { persona: draft }), { aliases: ['草稿鱼'], activity: 'normal', source: 'chat' })
+  const preview = store.effectiveBehaviorFor('onebot:1:group:unknown', 'chat', { persona: draft })
+  assert.deepEqual(preview, { aliases: ['草稿鱼'], activity: 'active', source: 'persona' })
+  preview.aliases.push('修改副本')
+  assert.deepEqual(store.snapshot(), snapshot)
+  await assert.rejects(store.setChatPreference(key, { stickers: true, activity: 'bad' }), /档位/)
+  assert.deepEqual(store.snapshot(), snapshot, '非法patch不能连带改变表情开关')
+  await store.setChatPreference(key, { activity: 'inherit' })
+  assert.deepEqual(store.effectiveBehaviorFor(key), { aliases: ['鱼鱼'], activity: 'active', source: 'persona' })
+  await store.setChatPrompt(key, '旧文本覆盖，无命名人设')
+  assert.deepEqual(store.effectiveBehaviorFor(key), { aliases: [], activity: 'inherit', source: 'global' })
+  const reloaded = createStore({ dir })
+  await reloaded.load()
+  assert.equal(reloaded.chatPreference(key).activity, 'inherit')
+})
+
+test('旧存档未写行为字段时继承；非法历史昵称清理而不阻止启动', async () => {
+  const dir = await tempDir()
+  const store = createStore({ dir })
+  await writeFile(store.file, JSON.stringify({ version: 1, chats: {}, personas: {
+    old: { text: '旧人设' }, bad: { text: '有损字段', aliases: [' 鱼鱼 ', null, '鱼', '鱼\n鱼'], activity: 'bad' },
+  }, preferences: { chats: { g1: { stickers: false }, g2: { activity: 'bad' } } } }))
+  await store.load()
+  assert.deepEqual(store.personaOf('old').aliases, [])
+  assert.equal(store.personaOf('old').activity, 'inherit')
+  assert.deepEqual(store.personaOf('bad').aliases, ['鱼鱼'])
+  assert.equal(store.personaOf('bad').activity, 'inherit')
+  assert.deepEqual(store.chatPreference('g1'), { proactiveUntil: 0, stickers: false, activity: 'inherit' })
+  assert.equal(store.chatPreference('g2').activity, 'inherit')
 })

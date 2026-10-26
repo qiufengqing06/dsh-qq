@@ -38,17 +38,17 @@ test('fmtTokens：千/百万缩写与边界', () => {
 
 test('chatDisplay：chatKey 解析、线路标签与超长截断', () => {
   // vm 里创建的对象原型与宿主不同，按字段比较（deepEqual 会因原型不同而失败）
-  const dm = F.chatDisplay('qqbot:1905346673:dm:OPENID')
+  const dm = F.chatDisplay('qqbot:100001:dm:OPENID')
   assert.equal(dm.kind, '官方线')
   assert.equal(dm.label, '私聊 OPENID')
-  const group = F.chatDisplay('qqbot:1905346673:group:90001')
+  const group = F.chatDisplay('qqbot:100001:group:90001')
   assert.equal(group.kind, '官方线')
   assert.equal(group.label, '群 90001')
-  const channel = F.chatDisplay('qqbot:1905346673:channel:GUILD:CHANNEL')
+  const channel = F.chatDisplay('qqbot:100001:channel:GUILD:CHANNEL')
   assert.equal(channel.kind, '官方线')
   assert.equal(channel.label, 'channel GUILD:CHANNEL')
 
-  const long = F.chatDisplay('qqbot:1905346673:group:' + '9'.repeat(40))
+  const long = F.chatDisplay('qqbot:100001:group:' + '9'.repeat(40))
   assert.equal(long.label.length, 29)
   assert.match(long.label, /…$/)
 })

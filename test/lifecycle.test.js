@@ -156,9 +156,26 @@ test('qqbot transport 缺凭据时降级运行，不阻塞插件加载', async (
   }
 })
 
+test('onebot transport 缺 wsUrl：如实停在 no-credentials，插件其余功能照常', async () => {
+  const dir = await tempDir()
+  const logger = createLogger()
+  const ctx = createFakeCtx({ services: { agents: createFakeAgents() }, logger })
+  await apply(ctx, { transport: 'onebot', autoConnect: true, dataDir: dir })
+  const plugin = getPluginHandle(ctx)
+  assert.equal(await plugin.ready, false, '没有 wsUrl 不可能连上')
+  const status = plugin.transport.status()
+  assert.equal(status.kind, 'onebot')
+  assert.equal(status.phase, 'no-credentials')
+  assert.equal(status.connected, false)
+  assert.match(status.lastError, /wsUrl/)
+  assert.equal(assertTransportContract(plugin.transport), true, '降级时契约仍完整')
+  assert.equal(plugin.control.listCommands().length > 0, true, '命令仍然可用')
+  await ctx.dispose()
+})
+
 test('transport 模块不存在时降级为 unavailable（未知 transport 的出口）', async () => {
   // loader 表只登记已实现的 transport；这里直接验证降级实现本身的契约与行为
-  const unavailable = createUnavailableTransport('mock', '模块加载失败：模拟')
+  const unavailable = createUnavailableTransport('onebot', '模块加载失败：模拟')
   assert.equal(assertTransportContract(unavailable), true)
   assert.equal(unavailable.status().phase, 'unavailable')
   assert.equal(unavailable.status().connected, false)

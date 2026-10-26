@@ -713,15 +713,15 @@ test('P4 /qq-approve：补答使用申请自己的线路与账号（多线路不
   await env.store.addPendingPairing({
     userId: 'u9',
     name: '新人',
-    transportKind: 'qqbot',
-    accountId: '1905346673',
+    transportKind: 'onebot',
+    accountId: '100002',
     message: { text: '你好，请问你能做什么', target: { kind: 'dm', userId: 'u9' } },
   })
   const result = await env.control.execute(parseCommand('/qq-approve u9'), env.ev, { role: 'owner' })
   assert.ok(result.replay, '应生成补答事件')
-  assert.equal(result.replay.transportKind, 'qqbot')
-  assert.equal(result.replay.accountId, '1905346673')
-  assert.equal(result.replay.chatKey, 'qqbot:1905346673:dm:u9')
+  assert.equal(result.replay.transportKind, 'onebot')
+  assert.equal(result.replay.accountId, '100002')
+  assert.equal(result.replay.chatKey, 'onebot:100002:dm:u9')
 })
 
 test('P4 权限：普通授权用户不能登录/登出', async () => {

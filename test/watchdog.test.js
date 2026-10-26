@@ -18,6 +18,7 @@ import { join } from 'node:path'
 
 import { apply, getPluginHandle } from '../lib/index.js'
 import { startFakeQQServer } from './helpers/fake-qq-server.js'
+import { startFakeNapCatServer } from './helpers/fake-napcat-server.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
 const tick = (ms = 25) => new Promise(resolve => setTimeout(resolve, ms))
@@ -151,3 +152,77 @@ test('看门狗：重连次数耗尽（disconnected）后服务恢复 → 自动
   assert.equal(revived, true, '看门狗应复活已耗尽的 transport')
 })
 
+test('看门狗：OneBot 缺 wsUrl 时不空转（hasCredentials seam，与官方 AppID/Secret 无关）', async t => {
+  const server = await startFakeQQServer({ heartbeatIntervalMs: 200 })
+  const saved = { id: process.env.QQ_APP_ID, secret: process.env.QQ_CLIENT_SECRET }
+  // 官方凭据是齐的：若看门狗只看 QQ_APP_ID/SECRET，就会误以为「可以复活」而每拍空转
+  process.env.QQ_APP_ID = 'app-x'
+  process.env.QQ_CLIENT_SECRET = 'secret-x'
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-watchdog-onebot-'))
+  const logger = createLogger()
+  const ctx = createFakeCtx({
+    services: { agents: createFakeAgents(), dshQqTransportDeps: { socketFactory: server.socketFactory, apiBase: server.apiBase, tokenUrl: server.tokenUrl } },
+    logger,
+  })
+  t.after(async () => {
+    await ctx.dispose()
+    await server.close()
+    if (saved.id === undefined) delete process.env.QQ_APP_ID
+    else process.env.QQ_APP_ID = saved.id
+    if (saved.secret === undefined) delete process.env.QQ_CLIENT_SECRET
+    else process.env.QQ_CLIENT_SECRET = saved.secret
+  })
+  await apply(ctx, { transport: 'onebot', autoConnect: true, dataDir: dir, watchdogIntervalMs: 100 })
+  const plugin = getPluginHandle(ctx)
+  assert.equal(await plugin.ready, false)
+  await tick(500) // 五个看门狗周期
+
+  assert.equal(plugin.transport.status().phase, 'no-credentials')
+  assert.equal(plugin.transport.hasCredentials(), false)
+  assert.equal(
+    logger.entries.info.some(line => line.includes('看门狗发现未连接')),
+    false,
+    '配置缺失属于静态问题：看门狗必须保持安静，等用户改配置/重载插件',
+  )
+})
+
+test('回归：transport 内部自愈后，watchdog 必须清掉陈旧的 lastStartError', async t => {
+  // 真机 2026-09-28：NapCat 掉线时首次 start 失败写下「握手超时」，之后 transport 用**内部退避**
+  // 自己连上了（这步不经过 connectOnce）——于是 WS 连接数已是 1，store.meta 里却还留着旧错误。
+  // 排查手册第一条就是看这个字段，陈旧值会直接把人带偏。
+  const server = await startFakeNapCatServer({ heartbeatIntervalMs: 500 })
+  let failProbe = true
+  server.setResponder(({ action }) =>
+    failProbe && action === 'get_login_info' ? { status: 'failed', retcode: 100, message: '探测失败' } : null,
+  )
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-watchdog-heal-'))
+  const agents = createFakeAgents()
+  const ctx = createFakeCtx({
+    services: { agents, dshQqTransportDeps: { backoffMs: [10] } },
+  })
+  await apply(ctx, {
+    transport: 'onebot',
+    autoConnect: true,
+    dataDir: dir,
+    watchdogIntervalMs: 100,
+    onebot: { wsUrl: server.wsUrl, sendRateLimitMs: 0 },
+  })
+  const plugin = getPluginHandle(ctx)
+  t.after(async () => {
+    await ctx.dispose()
+    await server.close()
+  })
+
+  assert.equal(await plugin.ready, false, '首次握手失败应如实返回 false')
+  const failed = await waitFor(() => plugin.store.snapshot().meta.lastStartError !== null)
+  assert.equal(failed, true, '失败原因必须写盘（否则真机无从排查）')
+  assert.match(plugin.store.snapshot().meta.lastStartError, /get_login_info|100/)
+
+  // 故障消失：transport 靠自己的退避重连连上（不经过 connectOnce）
+  failProbe = false
+  assert.equal(await waitFor(() => plugin.transport.status().connected === true), true, 'transport 应自愈')
+
+  // 看门狗下一拍发现「已连接」，把陈旧诊断清掉
+  const cleared = await waitFor(() => plugin.store.snapshot().meta.lastStartError === null)
+  assert.equal(cleared, true, '连上后陈旧诊断必须被清掉（诊断字段不能撒谎）')
+})

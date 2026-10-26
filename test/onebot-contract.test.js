@@ -15,17 +15,17 @@ import { assertTransportContract, makeCapabilities, makeInboundEvent } from '../
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
 /**
- * 第二 transport 实现（mock）：只实现 transport 契约，用来验证上层不做
- * `kind === 'qqbot'` 判断。事件形状与官方协议不同（private/group → dm/group），
- * 能力更弱：无 keyboard、无 typing、无 markdown。
+ * 极简 OneBot 11 mock（二期 napcat/onebot 的形状预演）：
+ * 只实现 transport 契约，事件按 OneBot 语义归一化（private/group → dm/group）。
+ * 能力差异：无 keyboard、无 typing、无 markdown —— 用来验证上层不做 `kind === 'qqbot'` 判断。
  */
-function createSecondMock({ accountId = '10001' } = {}) {
+function createOneBotMock({ accountId = '10001' } = {}) {
   const handlers = new Set()
   const interactionHandlers = new Set()
   const sent = []
   let connected = false
   return {
-    kind: 'altmock',
+    kind: 'onebot',
     capabilities: () =>
       makeCapabilities({ markdown: false, keyboard: false, typing: false, passiveReply: true, proactiveMessage: true, media: ['image', 'file'] }),
     async start() {
@@ -35,7 +35,7 @@ function createSecondMock({ accountId = '10001' } = {}) {
     async stop() {
       connected = false
     },
-    status: () => ({ connected, phase: connected ? 'connected' : 'stopped', kind: 'altmock', accountId }),
+    status: () => ({ connected, phase: connected ? 'connected' : 'stopped', kind: 'onebot', accountId }),
     onMessage(handler) {
       handlers.add(handler)
       return () => handlers.delete(handler)
@@ -44,11 +44,11 @@ function createSecondMock({ accountId = '10001' } = {}) {
       interactionHandlers.add(handler)
       return () => interactionHandlers.delete(handler)
     },
-    /** 灌入一条该实现风格的事件（post_type=message）。 */
+    /** 灌入一条 OneBot 风格事件（post_type=message）。 */
     inject(raw) {
       const isGroup = raw.message_type === 'group'
       const event = makeInboundEvent({
-        transportKind: 'altmock',
+        transportKind: 'onebot',
         accountId,
         target: isGroup ? { kind: 'group', groupId: String(raw.group_id) } : { kind: 'dm', userId: String(raw.user_id) },
         sender: { id: String(raw.user_id), name: String(raw.sender?.nickname ?? '') },
@@ -69,10 +69,10 @@ function createSecondMock({ accountId = '10001' } = {}) {
       return { ok: true, messageId: `ob-${sent.length}` }
     },
     async sendKeyboard() {
-      return { ok: false, error: '第二实现 实现未声明 keyboard 能力' }
+      return { ok: false, error: 'OneBot 实现未声明 keyboard 能力' }
     },
     async sendTyping() {
-      return { ok: false, error: '第二实现 实现未声明 typing 能力' }
+      return { ok: false, error: 'OneBot 实现未声明 typing 能力' }
     },
     recentChat() {
       const last = [...sent].reverse().find(entry => entry.target !== undefined)
@@ -83,15 +83,15 @@ function createSecondMock({ accountId = '10001' } = {}) {
   }
 }
 
-async function setup第二实现() {
-  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-altmock-'))
-  const config = resolveConfig({ transport: 'mock', autoConnect: false, dataDir: dir })
+async function setupOneBot() {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-onebot-'))
+  const config = resolveConfig({ transport: 'onebot', autoConnect: false, dataDir: dir })
   const store = createStore({ dir })
   await store.load()
-  const transport = createSecondMock({})
+  const transport = createOneBotMock({})
   const agents = createFakeAgents()
   const ctx = createFakeCtx({ services: { agents } })
-  const scope = createResourceScope({ name: 'altmock' })
+  const scope = createResourceScope({ name: 'onebot' })
   const logger = createLogger()
   const approval = createApprovalRegistry({})
   const bridge = createBridge({ ctx, config, store, transport, scope, logger })
@@ -103,8 +103,8 @@ async function setup第二实现() {
   return { config, store, transport, agents, ctx, scope, logger, approval, bridge, control, router }
 }
 
-test('第二实现 mock 满足 transport 契约（升级空间基线）', async () => {
-  const env = await setup第二实现()
+test('OneBot mock 满足 transport 契约（升级空间基线）', async () => {
+  const env = await setupOneBot()
   assert.equal(assertTransportContract(env.transport), true)
   const caps = env.transport.capabilities()
   assert.equal(caps.keyboard, false)
@@ -114,10 +114,10 @@ test('第二实现 mock 满足 transport 契约（升级空间基线）', async 
   await env.scope.dispose()
 })
 
-test('第二实现 链路：私聊消息进会话、回复按能力回发、chatKey 带 altmock 命名空间', async () => {
-  const env = await setup第二实现()
+test('OneBot 链路：私聊消息进会话、回复按能力回发、chatKey 带 onebot 命名空间', async () => {
+  const env = await setupOneBot()
   const event = env.transport.inject({ post_type: 'message', message_type: 'private', user_id: 10001, raw_message: '你好', message_id: 42, time: 1700000000 })
-  assert.equal(event.chatKey, 'altmock:10001:dm:10001', 'chatKey 必须带 transport 命名空间')
+  assert.equal(event.chatKey, 'onebot:10001:dm:10001', 'chatKey 必须带 transport 命名空间')
   const routed = await env.router.routeInbound(event)
   assert.equal(routed.handled, 'message')
   assert.equal(env.agents.created.length, 1)
@@ -132,8 +132,8 @@ test('第二实现 链路：私聊消息进会话、回复按能力回发、chat
   await env.scope.dispose()
 })
 
-test('第二实现 链路：群消息归一化为 group target；控制命令不进 LLM', async () => {
-  const env = await setup第二实现()
+test('OneBot 链路：群消息归一化为 group target；控制命令不进 LLM', async () => {
+  const env = await setupOneBot()
   await env.store.addAuthorized('10001', { role: 'owner' })
   const group = env.transport.inject({ post_type: 'message', message_type: 'group', group_id: 555, user_id: 10001, raw_message: '/qq-help', message_id: 7 })
   assert.deepEqual(group.target, { kind: 'group', groupId: '555' })
@@ -144,8 +144,8 @@ test('第二实现 链路：群消息归一化为 group target；控制命令不
   await env.scope.dispose()
 })
 
-test('第二实现 链路：审批无键盘能力时自动降级为文本 + 文本回复批准', async () => {
-  const env = await setup第二实现()
+test('OneBot 链路：审批无键盘能力时自动降级为文本 + 文本回复批准', async () => {
+  const env = await setupOneBot()
   const event = env.transport.inject({ post_type: 'message', message_type: 'private', user_id: 10001, raw_message: '跑个命令', message_id: 1 })
   await env.router.routeInbound(event)
   const sessionId = env.agents.created[0].sessionId
@@ -166,9 +166,9 @@ test('第二实现 链路：审批无键盘能力时自动降级为文本 + 文�
   await env.scope.dispose()
 })
 
-test('第二实现 与 QQBot 的 chatKey 不串（多协议并存基线）', async () => {
-  const env = await setup第二实现()
-  const altmockEvent = env.transport.inject({ post_type: 'message', message_type: 'private', user_id: 10001, raw_message: 'hi', message_id: 1 })
+test('OneBot 与 QQBot 的 chatKey 不串（多协议并存基线）', async () => {
+  const env = await setupOneBot()
+  const onebotEvent = env.transport.inject({ post_type: 'message', message_type: 'private', user_id: 10001, raw_message: 'hi', message_id: 1 })
   const qqbotEvent = makeInboundEvent({
     transportKind: 'qqbot',
     accountId: '10001',
@@ -176,8 +176,8 @@ test('第二实现 与 QQBot 的 chatKey 不串（多协议并存基线）', asy
     sender: { id: '10001', name: '' },
     text: 'hi',
   })
-  assert.notEqual(altmockEvent.chatKey, qqbotEvent.chatKey)
-  await env.router.routeInbound(altmockEvent)
+  assert.notEqual(onebotEvent.chatKey, qqbotEvent.chatKey)
+  await env.router.routeInbound(onebotEvent)
   await env.router.routeInbound(qqbotEvent)
   assert.equal(env.agents.created.length, 2, '同一数字 id 在两个协议下应是两个会话')
   await env.scope.dispose()

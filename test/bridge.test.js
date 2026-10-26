@@ -832,8 +832,8 @@ test('recentChat：切换 transport 后优先返回当前协议的历史对话�
   const { bridge, store, transport } = await setup()
   const ev = transport.injectText('x')
   // 造两条历史：一条旧协议（qqbot），一条当前协议（mock）
-  await store.setCurrentSession('qqbot:1905346673:dm:OPENID-OLD', 'qq-old', {})
-  await store.touch('qqbot:1905346673:dm:OPENID-OLD', { target: { kind: 'p2p', id: 'OPENID-OLD' }, at: 1 })
+  await store.setCurrentSession('qqbot:100001:dm:OPENID-OLD', 'qq-old', {})
+  await store.touch('qqbot:100001:dm:OPENID-OLD', { target: { kind: 'p2p', id: 'OPENID-OLD' }, at: 1 })
   await store.touch(ev.chatKey, { target: { kind: 'p2p', id: 'mock-user' }, at: 2 })
 
   assert.deepEqual(
@@ -975,7 +975,7 @@ test('引用只有附件的消息：发送人也要标出来（文件是谁发�
   assert.match(quoteBlock.text, /^\[引用消息\] \[秋月明\|44444\] 文件 a\.xls/)
 })
 
-// ── 纯文本渠道（个人 QQ / Mock：不渲染 Markdown、无卡片） ──
+// ── 纯文本渠道（个人 QQ / OneBot：不渲染 Markdown、无卡片） ──
 test('toPlainText：去掉 Markdown/卡片语法，保留内容与顺序', () => {
   const markdown = [
     '**重点**：这次成功了 🎉',
@@ -1260,6 +1260,7 @@ test('token 用量：assistant/message 的 usage 按对话记账（一轮多步�
   const { bridge, transport, agents, store } = await setup({}, {}, { capabilities: { markdown: true } })
   await bridge.handleUserMessage(transport.injectText('ping'))
   const agent = agents.live.get(agents.created[0].sessionId)
+  // 一轮两步：两条 assistant/message 各带 usage
   agent.reply('第一步', 900, { inputTokens: 100, outputTokens: 40, totalTokens: 140 })
   agent.reply('第二步', 901, { inputTokens: 20, outputTokens: 10 })
   agent.ctx.emitStatus('idle')

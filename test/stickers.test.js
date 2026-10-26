@@ -10,10 +10,10 @@ import { createStickerTools } from '../lib/sticker-tools.js'
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 1)])
 
-async function setup({ stickers = {}, groupId = '100', clock = () => Date.now(), preferredIdsForChat = () => [] } = {}) {
+async function setup({ stickers = {}, groupId = '100', clock = () => Date.now(), preferredIdsForChat = () => [], activityForChat = () => 'inherit' } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-stickers-'))
   const config = resolveConfig({ transport: 'mock', dataDir: dir, autoConnect: false, stickers })
-  const store = createStickerStore({ dir, config, clock, preferredIdsForChat })
+  const store = createStickerStore({ dir, config, clock, preferredIdsForChat, activityForChat })
   await store.load()
   const sent = []
   const transport = {
@@ -46,6 +46,61 @@ function sendOptions(env, extra = {}) {
   return { chatKey: env.ev.chatKey, target: env.ev.target, transport: env.transport, mode: 'chat', ...extra }
 }
 
+test('选图预演与实发共用排序和额度闸门，但不记账、不泄露私聊图', async t => {
+  let preferred = []
+  const env = await setup({ preferredIdsForChat: () => preferred })
+  t.after(() => rm(env.dir, { recursive: true, force: true }))
+  const a = await addSticker(env, 41)
+  const b = await addSticker(env, 42)
+  preferred = [a.id]
+  await env.store.capture({ ...env.ev, chatKey: 'qqbot:1:dm:private', target: { kind: 'dm', userId: 'private' } }, {
+    mode: 'chat', download: async () => ({ ok: true, data: Buffer.concat([PNG, Buffer.from([43])]), contentType: 'image/png' }),
+  })
+  const privateId = env.store.listAll().find(item => ![a.id, b.id].includes(item.id)).id
+  await env.store.setMeta(privateId, { desc: 'PRIVATE_IMAGE_DESCRIPTION', tags: ['开心'] })
+  const opts = { chatKey: env.ev.chatKey, tag: 'happy', turnId: 'preview-turn' }
+  const before = await readFile(env.store.indexPath(), 'utf8')
+  const first = env.store.previewSelection(opts)
+  assert.equal(first.id, a.id)
+  assert.equal(env.store.previewSelection({ ...opts, preferredIds: [b.id] }).id, b.id, '草稿偏好只影响本次预演')
+  assert.equal(env.store.list(env.ev.chatKey, { preferredIds: [b.id] })[0].id, b.id)
+  assert.equal(env.store.previewSelection({ ...opts, selectedIds: [a.id] }).id, b.id)
+  assert.match(env.store.previewSelection({ ...opts, selectedIds: [a.id, b.id] }).error, /上限/)
+  const denied = env.store.previewSelection({ ...opts, id: privateId, preferredIds: [privateId] })
+  assert.equal(denied.ok, false)
+  assert.doesNotMatch(JSON.stringify(denied), /PRIVATE_IMAGE_DESCRIPTION/)
+  assert.equal(env.store.list(env.ev.chatKey, { ids: [privateId], preferredIds: [privateId] }).length, 0)
+  assert.equal(await readFile(env.store.indexPath(), 'utf8'), before)
+  assert.equal(env.sent.length, 0)
+  const actual = await env.store.send(sendOptions(env, { tag: 'happy', turnId: opts.turnId }))
+  assert.equal(actual.id, first.id)
+  assert.equal(env.store.itemOf(first.id).sendCount, 1, '多次预演不占实际发送计数')
+})
+
+test('预演日额度与活跃档位冷却和实发一致，草稿档位不改变已保存档位', async t => {
+  let now = new Date(2026, 9, 26, 12).getTime()
+  let activity = 'normal'
+  const env = await setup({ clock: () => now, activityForChat: () => activity,
+    stickers: { send: { cooldownMs: 1000, dailyPerChat: 2 } } })
+  t.after(() => rm(env.dir, { recursive: true, force: true }))
+  const a = await addSticker(env, 44)
+  const b = await addSticker(env, 45)
+  const c = await addSticker(env, 46)
+  assert.equal((await env.store.send(sendOptions(env, { id: a.id, turnId: 'first' }))).ok, true)
+  now += 750
+  const opts = { chatKey: env.ev.chatKey, id: b.id, turnId: 'second' }
+  assert.match(env.store.previewSelection({ ...opts, activity: 'quiet' }).error, /冷却/)
+  assert.equal(env.store.previewSelection({ ...opts, activity: 'active' }).ok, true)
+  assert.match((await env.store.send(sendOptions(env, opts))).error, /冷却/, '草稿预演没有改变 normal')
+  activity = 'active'
+  assert.equal(env.store.previewSelection(opts).ok, true)
+  assert.match(env.store.previewSelection({ ...opts, selectedIds: [c.id] }).error, /今日.*额度/)
+  assert.equal((await env.store.send(sendOptions(env, opts))).ok, true)
+  now += 5000
+  assert.match(env.store.previewSelection({ ...opts, id: c.id, turnId: 'third' }).error, /今日.*额度/)
+  assert.match((await env.store.send(sendOptions(env, { id: c.id, turnId: 'third' }))).error, /今日.*额度/)
+})
+
 test('管理分页：按分类筛选后取页，时间相同时顺序稳定，可读取第120张之后的图片', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-sticker-pages-'))
   t.after(() => rm(dir, { recursive: true, force: true }))
@@ -65,6 +120,12 @@ test('管理分页：按分类筛选后取页，时间相同时顺序稳定，�
   assert.equal(store.listAll(12, { state: 'library', offset: 0 }).length, 10)
   assert.equal(store.listAll(12, { state: 'trash', offset: 0 }).length, 0)
   assert.equal(new Set([...first, ...last].map(item => item.id)).size, 18)
+  await store.setMeta(first[0].id, { desc: '已有描述' })
+  assert.equal(store.countAll({ state: 'candidate', missingDescription: true }), 125)
+  assert.equal(store.countAll({ state: 'library', missingDescription: true }), 10)
+  const missing = store.listAll(12, { state: 'candidate', missingDescription: true, offset: 120 })
+  assert.equal(missing.length, 5, '缺描述筛选在分页之前生效')
+  assert.equal(missing[0].id, (121).toString(16).padStart(64, '0'))
 })
 
 test('图片类型只用魔数判断，SVG/文本拒绝', () => {

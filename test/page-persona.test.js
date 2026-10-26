@@ -21,11 +21,13 @@ class Element {
     this.value = ''
     this.disabled = false
     this.ownText = ''
+    this.style = {}
   }
   set textContent(value) { this.ownText = String(value); this.children = [] }
   get textContent() { return this.ownText + this.children.map(child => child.textContent).join('') }
   setAttribute(name, value) { this[name] = String(value) }
   appendChild(child) { this.children.push(child); return child }
+  contains(node) { return this === node || this.children.some(child => child.contains(node)) }
   addEventListener(type, listener) {
     const listeners = this.events.get(type) ?? []
     listeners.push(listener)
@@ -47,7 +49,7 @@ function find(root, matches) {
 const settle = () => new Promise(resolve => setImmediate(resolve))
 
 function page(options = {}) {
-  const roots = new Map(['prompts', 'fresh', 'fresh-text', 'badge-prompts', 'prompts-note'].map(id => {
+  const roots = new Map(['prompts', 'fresh', 'fresh-text', 'badge-prompts', 'prompts-note', 'stickers', 'chat-control'].map(id => {
     const node = new Element('div')
     node.id = id
     return [id, node]
@@ -74,14 +76,17 @@ function page(options = {}) {
   const previews = []
   const libraryReads = []
   const notices = []
+  const local = new Map()
   let failure = ''
   let pendingState = null
   let previewFailure = ''
   let pendingPreview = null
   const context = {
     document, window: { confirm: () => true },
+    localStorage: { getItem: key => local.get(key) ?? null, setItem: (key, value) => local.set(key, value) },
     S: structuredClone(state), dirty: {}, personaEditing: '', personaDraft: null, promptEditing: '',
-    personaStickerState: null, personaTrial: null, personaPreviews: {},
+    personaStickerState: null, personaTrial: null, personaPreviews: {}, diagnosticOpen: {},
+    stickerEditors: {}, stickerFocus: '', stickerLoading: false,
     HDR: { 'content-type': 'application/json', 'x-dsh-qq-panel': '1' },
     notice: message => notices.push(message), fmtTime: () => 'test-time',
     fetch: async (path, requestOptions) => {
@@ -107,7 +112,7 @@ function page(options = {}) {
         }
         data = previewFailure ? { ok: false, error: previewFailure } : {
           ok: true, effective, model: { provider: 'fixture', model: 'mock-model' },
-          ...(body.message ? { reply: '试聊回复：' + body.message } : {}),
+          ...((body.message || body.imageStickerId) ? (options.actions ? { reply: '', actions: options.actions, warnings: ['仅图文预演'] } : { reply: '试聊回复：' + body.message }) : {}),
         }
       } else {
         assert.equal(path, '/dsh-qq/api/personas')
@@ -118,16 +123,17 @@ function page(options = {}) {
       return { status: 200, json: async () => data }
     },
   }
-  for (const [, name] of source('render').matchAll(/\b(render[A-Z]\w*)\(\)/g)) {
+  for (const [, name] of source('render').matchAll(/\b(render[A-Z]\w*)\(/g)) {
     if (name !== 'renderPrompts') context[name] = () => {}
   }
-  const functions = ['el', 'btn', 'pill', 'api', 'personaById', 'personaOrder', 'personaAction',
+  const functions = ['el', 'btn', 'pill', 'api', 'activityLabel', 'activitySelect', 'personaAliases', 'releasePersonaTrial', 'personaById', 'personaOrder', 'personaAction',
     'startPersonaEdit', 'personaStickerIds', 'personaStickerPicker', 'personaEffectiveDetails', 'renderPersonaPreview',
     'showPersonaPreview', 'personaTrialPanel', 'personaEditor', 'renderPersonaBlock', 'renderPrompts', 'promptLabel', 'render', 'load']
   vm.createContext(context)
   vm.runInContext(functions.map(source).join('\n'), context)
   return {
-    posts, previews, libraryReads, notices, context, document,
+    posts, previews, libraryReads, notices, context, document, local, roots,
+    useFunctions(names) { vm.runInContext(names.map(source).join('\n'), context) },
     field: id => document.getElementById(`persona-${id}`),
     async open(id = '002') { context.startPersonaEdit(id); await settle() },
     input(id, value) {
@@ -177,7 +183,7 @@ test('既有人设：旧后端不返回 id，仍显示并保存稳定的 002', a
   app.input('text', '修改后的人设内容')
   app.field('id').value = '' // The disabled field must not become the identity source.
   await app.click('保存')
-  assert.deepEqual(app.posts, [{ action: 'save', id: '002', name: '修改后的名称', text: '修改后的人设内容', stickerIds: [] }])
+  assert.deepEqual(app.posts, [{ action: 'save', id: '002', name: '修改后的名称', text: '修改后的人设内容', stickerIds: [], aliases: [], activity: 'inherit' }])
   assert.equal(app.field('text'), null)
 })
 
@@ -225,7 +231,7 @@ test('新建人设的 id、名称和正文均同步草稿并按用户输入保�
   assert.equal(app.field('name').value, ' 新人设 ')
   assert.equal(app.field('text').value, '新正文\n第二行')
   await app.click('保存')
-  assert.deepEqual(app.posts, [{ action: 'save', id: 'new_persona', name: '新人设', text: '新正文\n第二行', stickerIds: [] }])
+  assert.deepEqual(app.posts, [{ action: 'save', id: 'new_persona', name: '新人设', text: '新正文\n第二行', stickerIds: [], aliases: [], activity: 'inherit' }])
 })
 
 test('保存或删除失败保留未保存内容，刷新后仍可重试保存', async () => {
@@ -244,7 +250,7 @@ test('保存或删除失败保留未保存内容，刷新后仍可重试保存',
   assert.ok(app.notices.includes('模拟存储失败'))
   app.fail('')
   await app.click('保存')
-  assert.deepEqual(app.posts.at(-1), { action: 'save', id: '002', name: '失败时保留名称', text: '失败时保留正文', stickerIds: [] })
+  assert.deepEqual(app.posts.at(-1), { action: 'save', id: '002', name: '失败时保留名称', text: '失败时保留正文', stickerIds: [], aliases: [], activity: 'inherit' })
   assert.equal(app.field('text'), null)
 })
 
@@ -306,7 +312,7 @@ test('文字试聊携带未保存草稿供预览，修改人设后不沿用旧�
   app.input('trial-message', '第一句')
   await app.click('试聊')
   assert.deepEqual(app.previews[0], {
-    mode: 'chat', draft: { id: '002', name: '未保存名字', text: '此刻未保存的人设', stickerIds: ['chosen'] }, message: '第一句', history: [],
+    mode: 'chat', draft: { id: '002', name: '未保存名字', text: '此刻未保存的人设', stickerIds: ['chosen'], aliases: [], activity: 'inherit' }, message: '第一句', history: [], previewActions: true,
   })
   assert.match(app.field('trial-log').textContent, /试聊回复：第一句/)
   assert.equal(app.field('text'), textarea)
@@ -342,4 +348,112 @@ test('试聊期间禁止重复请求，失败保留消息与草稿，重试后�
   await app.click('清空试聊')
   assert.equal(app.field('trial-log').textContent, '')
   assert.deepEqual(app.posts, [])
+})
+
+test('昵称与人设档位：轮询保留草稿，保存归一化昵称并携带档位', async () => {
+  const app = page()
+  await app.open()
+  const aliases = app.input('aliases', '鱼鱼，小鱼 鱼鱼')
+  const activity = app.field('activity')
+  activity.value = 'active'; activity.emit('change')
+  app.document.activeElement = null
+  await app.context.load()
+  assert.equal(app.field('aliases'), aliases)
+  assert.equal(app.field('aliases').value, '鱼鱼，小鱼 鱼鱼')
+  assert.equal(app.field('activity').value, 'active')
+  await app.click('保存')
+  assert.deepEqual(app.posts[0].aliases, ['鱼鱼', '小鱼'])
+  assert.equal(app.posts[0].activity, 'active')
+})
+
+test('昵称限制：不足2字或超过8个不能提交，错误保留草稿', async () => {
+  const app = page()
+  await app.open()
+  app.input('aliases', '鱼')
+  await app.click('保存')
+  assert.equal(app.posts.length, 0)
+  assert.match(app.notices.at(-1), /2–20/)
+  app.input('aliases', Array.from({ length: 9 }, (_, i) => `昵称${i}`).join(','))
+  await app.click('保存')
+  assert.equal(app.posts.length, 0)
+  assert.equal(app.field('text').value, '旧人设内容')
+})
+
+test('图文预演：图库图片可单独提交，空文字回复仍渲染图片动作和警告', async () => {
+  const id = 'a'.repeat(64)
+  const chatKey = 'onebot:fixture:group:test'
+  const app = page({ chatKey, stickerIds: [id], items: [{ id, desc: '开心小鱼', tags: ['开心'], state: 'library' }], actions: [{ type: 'sticker', id, desc: '开心小鱼', available: true }] })
+  await app.open()
+  app.field('trial-sticker').value = id; app.field('trial-sticker').emit('change')
+  await app.click('试聊')
+  assert.equal(app.previews.length, 0, '使用图库图前要求选择对话范围')
+  app.field('trial-chat').value = chatKey; app.field('trial-chat').emit('change')
+  await app.click('试聊')
+  assert.equal(app.previews[0].message, '')
+  assert.equal(app.previews[0].imageStickerId, id)
+  assert.equal(app.previews[0].chatKey, chatKey)
+  assert.equal(app.previews[0].previewActions, true)
+  assert.ok(find(app.field('trial-log'), node => node.tagName === 'IMG'))
+  assert.match(app.field('trial-log').textContent, /仅图文预演/)
+  assert.deepEqual(app.posts, [])
+})
+
+test('图文预演：不可用图片只显示原因，不请求缩略图', async () => {
+  const app = page({ actions: [{ type: 'sticker', id: 'missing', desc: '缺失图片', available: false, reason: '当前群不可用' }] })
+  await app.open(); app.input('trial-message', '发一张图')
+  await app.click('试聊')
+  assert.match(app.field('trial-log').textContent, /当前群不可用/)
+  assert.equal(find(app.field('trial-log'), node => node.tagName === 'IMG'), null)
+})
+
+test('本地样例：手动保存加载删除，不访问服务器且最多10条', async () => {
+  const app = page()
+  await app.open(); app.input('trial-message', '保存这个测试问题')
+  await app.click('保存为样例')
+  const key = 'dsh-qq.persona-trial-cases.v1'
+  const rows = JSON.parse(app.local.get(key))
+  assert.equal(rows.length, 1)
+  assert.deepEqual(Object.keys(rows[0]).sort(), ['id', 'imageStickerId', 'message'])
+  assert.deepEqual(app.previews, [])
+  app.input('trial-message', '另一句')
+  app.field('trial-cases').value = rows[0].id
+  await app.click('加载样例')
+  assert.equal(app.field('trial-message').value, '保存这个测试问题')
+  await app.click('删除样例')
+  assert.deepEqual(JSON.parse(app.local.get(key)), [])
+  app.context.personaTrial.cases = Array.from({ length: 10 }, (_, i) => ({ id: String(i), message: '测试', imageStickerId: '' }))
+  await app.click('保存为样例')
+  assert.match(app.field('trial-status').textContent, /最多保存 10/)
+  assert.deepEqual(app.posts, [])
+})
+
+test('图库轮询：编辑期间不重建节点，只更新补全进度', () => {
+  const app = page()
+  app.useFunctions(['stickerTaggingText', 'renderStickers'])
+  const host = app.roots.get('stickers')
+  const editor = new Element('textarea')
+  editor.value = '正在输入的中文说明'
+  const status = new Element('div'); status.id = 'sticker-tagging-status'
+  host.appendChild(editor); host.appendChild(status)
+  app.context.stickerEditors = { fixture: { node: editor } }
+  app.context.S.stickers = { tagging: { running: true, pending: 2, completed: 3, failed: 1 } }
+  app.context.renderStickers('poll')
+  assert.equal(host.children[0], editor)
+  assert.equal(editor.value, '正在输入的中文说明')
+  assert.match(status.textContent, /等待 2.*完成 3.*失败 1/)
+})
+
+test('诊断：中文原因、耗时与展开状态在刷新后保留', () => {
+  const app = page()
+  app.useFunctions(['skippedLabel', 'renderDiagnostics'])
+  app.context.S.diagnostics = { recent: [{ id: 'd1', chatKey: 'mock:a:group:g', at: Date.now() - 3000, status: 'ignored', reason: 'addressed-other', durationMs: 1200, steps: [{ at: Date.now(), status: 'ignored', reason: 'addressed-other' }] }] }
+  const host = app.roots.get('chat-control')
+  app.context.renderDiagnostics(host)
+  const detail = find(host, node => node.tagName === 'DETAILS')
+  assert.equal(detail.open, false)
+  assert.match(host.textContent, /正在对其他群友说话/)
+  assert.match(host.textContent, /耗时 1.2 秒/)
+  detail.open = true; detail.emit('toggle'); host.textContent = ''
+  app.context.renderDiagnostics(host)
+  assert.equal(find(host, node => node.tagName === 'DETAILS').open, true)
 })

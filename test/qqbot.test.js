@@ -920,7 +920,7 @@ test('去重窗口/容量由配置驱动（dedupWindowMs / dedupMaxSize）', asy
   assert.equal(resolveConfig({ transport: 'qqbot', autoConnect: false }).dedupMaxSize, DEDUP_MAX_SIZE)
 })
 
-test('插件卸载/热重载：scope.dispose() 必须断开 WS（与 mock 同款泄漏防护）', async t => {
+test('插件卸载/热重载：scope.dispose() 必须断开 WS（与 onebot 同款泄漏防护）', async t => {
   const env = await setup()
   t.after(() => cleanup(env))
   assert.equal(await env.transport.start(), true)
@@ -941,7 +941,7 @@ test('getProfile：返回昵称与头像（GET /users/@me），失败时返回 n
   env.server.setRestResponse('/users/@me', {
     status: 200,
     body: {
-      id: '201741409652153322',
+      id: '200000000000000001',
       username: '小Q',
       avatar: 'http://thirdqq.qlogo.cn/g?b=oidb&k=abc&s=0',
     },
@@ -950,7 +950,7 @@ test('getProfile：返回昵称与头像（GET /users/@me），失败时返回 n
   await tick(20)
 
   const profile = await env.transport.getProfile()
-  assert.deepEqual(profile, { id: '201741409652153322', name: '小Q', avatar: 'http://thirdqq.qlogo.cn/g?b=oidb&k=abc&s=0' })
+  assert.deepEqual(profile, { id: '200000000000000001', name: '小Q', avatar: 'http://thirdqq.qlogo.cn/g?b=oidb&k=abc&s=0' })
   const rest = env.server.state.rest.filter(entry => entry.path === '/users/@me')
   assert.equal(rest.length, 1, '只请求一次')
   assert.match(rest[0].headers.authorization ?? rest[0].headers.Authorization ?? '', /^QQBot /)
@@ -968,6 +968,7 @@ test('getProfile：接口失败（404/500）时返回 null，不抛错', async t
   await tick(20)
   assert.equal(await env.transport.getProfile(), null)
 })
+
 
 test('op 9（invalid session）：走会话重置而不是致命关闭，能自动重连', async t => {
   const env = await setup({ deps: { backoffMs: [20] } })

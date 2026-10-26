@@ -28,7 +28,18 @@ oracle）**用于确认协议语义、边界条件与错误码，包括：
 
 三者均声明为 `optionalDependencies`：未安装时直连路径完全正常，插件不会因缺少它们而加载失败。
 
+## OneBot 11 / NapCat（个人 QQ 接入）
+
+`lib/onebot/` 实现的是 **OneBot 11 协议客户端**，协议语义参考
+[OneBot 11 标准](https://github.com/botuniverse/onebot-11) 与
+[NapCat 官方文档](https://doc.napneko.icu/)（接入框架 / WebUI 配置 / 网络基础 / API 列表 / 消息格式兼容 / 文件处理）。
+项目本身不包含也未修改 NapCat、QQ NT 客户端或任何第三方 QQ 协议实现的代码，仅通过 WebSocket 调用其公开接口。
+
+**使用个人 QQ 接入即表示你了解**：NapCat 等第三方实现并非腾讯官方产品，其使用可能违反腾讯用户协议，
+存在账号被限制或封禁的风险。请自行评估并使用小号。
+
 ## 商标与平台条款
 
-QQ、QQ 机器人开放平台等名称与接口归腾讯所有。使用本插件需要你在
-[q.qq.com](https://q.qq.com) 注册机器人应用并遵守其开放平台条款与频率限制。
+QQ、QQ 机器人开放平台等名称与接口归腾讯所有。使用官方 QQBot 线路需在
+[q.qq.com](https://q.qq.com) 准备机器人应用，并遵守其开放平台条款与频率限制。
+个人 QQ 线路使用独立安装的 OneBot 服务，不要求提供 QQBot 应用凭据。

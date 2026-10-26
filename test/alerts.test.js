@@ -49,11 +49,11 @@ const logger = createLogger()
 
 test('掉线未超过阈值：页面告警可见，但不发通知、不记事件', async () => {
   const qq = fakeLine('qqbot', { connected: false, phase: 'disconnected' })
-  const ob = fakeLine('mock')
+  const ob = fakeLine('onebot')
   let now = 1_000_000
   const alerts = createAlertManager({
     config: resolveConfig({ alerts: { downAfterMs: 60_000 } }),
-    store: makeStore({ mock: '20002' }),
+    store: makeStore({ onebot: '20002' }),
     transports: makeRegistry([qq, ob]),
     clock: () => now,
     logger,
@@ -69,11 +69,11 @@ test('掉线未超过阈值：页面告警可见，但不发通知、不记事�
 
 test('超过阈值：用另一条活着的线路私聊主人发一次通知，不重复', async () => {
   const qq = fakeLine('qqbot', { connected: false, phase: 'disconnected', lastError: '握手超时' })
-  const ob = fakeLine('mock')
+  const ob = fakeLine('onebot')
   let now = 1_000_000
   const alerts = createAlertManager({
     config: resolveConfig({}),
-    store: makeStore({ qqbot: 'openid-owner', mock: '20002' }),
+    store: makeStore({ qqbot: 'openid-owner', onebot: '20002' }),
     transports: makeRegistry([qq, ob]),
     pageUrl: () => 'http://127.0.0.1:3080/dsh-qq',
     clock: () => now,
@@ -96,11 +96,11 @@ test('超过阈值：用另一条活着的线路私聊主人发一次通知，�
 
 test('恢复：发一次恢复通知，之后重复评估不再发', async () => {
   const qq = fakeLine('qqbot', { connected: false, phase: 'disconnected' })
-  const ob = fakeLine('mock')
+  const ob = fakeLine('onebot')
   let now = 1_000_000
   const alerts = createAlertManager({
     config: resolveConfig({}),
-    store: makeStore({ mock: '20002' }),
+    store: makeStore({ onebot: '20002' }),
     transports: makeRegistry([qq, ob]),
     clock: () => now,
     logger,
@@ -121,11 +121,11 @@ test('恢复：发一次恢复通知，之后重复评估不再发', async () =>
 
 test('两条都挂：通知排队，任意一条恢复后补发', async () => {
   const qq = fakeLine('qqbot', { connected: false, phase: 'disconnected' })
-  const ob = fakeLine('mock', { connected: false, phase: 'disconnected' })
+  const ob = fakeLine('onebot', { connected: false, phase: 'disconnected' })
   let now = 1_000_000
   const alerts = createAlertManager({
     config: resolveConfig({}),
-    store: makeStore({ qqbot: 'openid-owner', mock: '20002' }),
+    store: makeStore({ qqbot: 'openid-owner', onebot: '20002' }),
     transports: makeRegistry([qq, ob]),
     clock: () => now,
     logger,
@@ -148,11 +148,11 @@ test('两条都挂：通知排队，任意一条恢复后补发', async () => {
 
 test('notify=false：只页面提醒，不发 QQ 消息，但事件仍记录', async () => {
   const qq = fakeLine('qqbot', { connected: false, phase: 'disconnected' })
-  const ob = fakeLine('mock')
+  const ob = fakeLine('onebot')
   let now = 1_000_000
   const alerts = createAlertManager({
     config: resolveConfig({ alerts: { notify: false } }),
-    store: makeStore({ mock: '20002' }),
+    store: makeStore({ onebot: '20002' }),
     transports: makeRegistry([qq, ob]),
     clock: () => now,
     logger,
@@ -167,11 +167,11 @@ test('notify=false：只页面提醒，不发 QQ 消息，但事件仍记录', a
 
 test('enabled=false：完全不评估（空快照）', async () => {
   const qq = fakeLine('qqbot', { connected: false, phase: 'disconnected' })
-  const ob = fakeLine('mock')
+  const ob = fakeLine('onebot')
   let now = 1_000_000
   const alerts = createAlertManager({
     config: resolveConfig({ alerts: { enabled: false } }),
-    store: makeStore({ mock: '20002' }),
+    store: makeStore({ onebot: '20002' }),
     transports: makeRegistry([qq, ob]),
     clock: () => now,
     logger,
@@ -203,11 +203,11 @@ test('no-credentials 不算掉线（配置问题，页面已有提示）', async
 
 test('冷却期：恢复后又掉线，冷却内不重复通知', async () => {
   const qq = fakeLine('qqbot', { connected: false, phase: 'disconnected' })
-  const ob = fakeLine('mock')
+  const ob = fakeLine('onebot')
   let now = 1_000_000
   const alerts = createAlertManager({
     config: resolveConfig({ alerts: { cooldownMs: 600_000 } }),
-    store: makeStore({ mock: '20002' }),
+    store: makeStore({ onebot: '20002' }),
     transports: makeRegistry([qq, ob]),
     clock: () => now,
     logger,
@@ -230,7 +230,7 @@ test('冷却期：恢复后又掉线，冷却内不重复通知', async () => {
 
 test('主人私聊未配置：不发通知，但事件仍记录（页面可看）', async () => {
   const qq = fakeLine('qqbot', { connected: false, phase: 'disconnected' })
-  const ob = fakeLine('mock')
+  const ob = fakeLine('onebot')
   let now = 1_000_000
   const alerts = createAlertManager({
     config: resolveConfig({}),

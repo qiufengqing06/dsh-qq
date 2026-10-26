@@ -15,8 +15,8 @@ import { resolveConfig } from '../lib/config.js'
 import { createGroupMemory, createGroupNoteTool } from '../lib/group-memory.js'
 import { createLogger } from './helpers/fake-ctx.js'
 
-const GROUP = 'mock:10001:group:30003'
-const OTHER_GROUP = 'mock:10001:group:99999'
+const GROUP = 'onebot:10001:group:30003'
+const OTHER_GROUP = 'onebot:10001:group:99999'
 
 async function setup(overrides = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-gm-'))
@@ -55,7 +55,7 @@ test('合并输入不重复进入环境上下文，后到消息仍留给下一�
 test('环境缓冲：群消息进缓冲，私聊不进；超出上限滚动丢弃最旧', async () => {
   const { memory } = await setup({ groupMemory: { bufferMessages: 3 } })
   assert.equal(memory.observe(groupEvent('一')), true)
-  assert.equal(memory.observe({ ...groupEvent('私聊'), chatKey: 'mock:1:dm:2', target: { kind: 'dm', userId: '2' } }), false, '私聊不进群缓冲')
+  assert.equal(memory.observe({ ...groupEvent('私聊'), chatKey: 'onebot:1:dm:2', target: { kind: 'dm', userId: '2' } }), false, '私聊不进群缓冲')
   for (const text of ['二', '三', '四', '五']) memory.observe(groupEvent(text))
   const pending = memory.pendingContext(GROUP)
   assert.equal(pending.count, 3, '只保留最近 3 条')

@@ -8,17 +8,20 @@ function at(hhmm) {
   return new Date(2026, 9, 25, h, m).getTime()
 }
 
-function env({ mode = 'chat', participation = {}, now = at('12:00') } = {}) {
+function env({ mode = 'chat', participation = {}, now = at('12:00'), behavior = {}, storeOverrides = {}, onDecision } = {}) {
   const state = { now }
   const store = {
     modeFor: () => mode,
     chatPreference: () => ({ proactiveUntil: 0, stickers: true }),
     memberPreference: () => ({ name: '', proactiveUntil: 0 }),
+    effectiveBehaviorFor: () => behavior,
+    ...storeOverrides,
   }
   const p = createParticipation({
     config: { participation: { enabled: true, mode: 'block', threshold: 0.55, quietHours: '23:00-08:00', cooldownMs: 120000, dailyWakeLimit: 3, ...participation } },
     store,
     clock: () => state.now,
+    onDecision,
   })
   return { p, state }
 }
@@ -126,7 +129,7 @@ test('续聊按完整chatKey隔离，窗口过期/结束语/人数上限生效',
   const { p, state } = env({ participation: { dailyWakeLimit: 0, cooldownMs: 0 } })
   const chatKey = ev('').chatKey
   p.onReply({ chatKey, senderId: 'u1', messageId: 'ours' })
-  assert.equal(p.evaluate(ev('确实如此', { chatKey: 'mock:1:group:2' })).wake, false)
+  assert.equal(p.evaluate(ev('确实如此', { chatKey: 'onebot:1:group:2' })).wake, false)
   assert.equal(p.evaluate(ev('确实如此', { chatKey: 'qqbot:other:group:2' })).wake, false)
   assert.equal(p.evaluate(ev('谢谢')).skipped, 'conversation-ended')
   assert.equal(p.evaluate(ev('确实如此')).wake, false, '结束语关闭该参与者续聊')
@@ -229,4 +232,98 @@ test('接话不延长主动冷却，活跃参与者仍遵守安静时段和聊�
   quiet.p.observeReply({ chatKey, senderId: 'u1', messageId: 'ours' })
   quiet.state.now += 60_000
   assert.equal(quiet.p.evaluate(ev('没钱还吃饭')).skipped, 'quiet', '窗口仍有效也不绕过安静时段')
+})
+
+
+test('明确昵称呼唤属于接话，不消耗或清空主动预算，普通提及不算呼唤', () => {
+  const { p, state } = env({ participation: { dailyWakeLimit: 1 }, behavior: { aliases: ['鱼鱼', '肥鱼'], activity: 'inherit' } })
+  for (const text of ['刚才鱼鱼说过', '鱼鱼今天没来', '肥鱼好吃']) assert.equal(p.evaluate(ev(text)).wake, false, text)
+  for (const text of ['鱼鱼出来', '鱼鱼，你怎么看', '在吗，鱼鱼']) {
+    const result = p.evaluate(ev(text))
+    assert.equal(result.wake, true, text)
+    assert.deepEqual(result.reasons, ['alias'])
+  }
+  assert.equal(p.evaluate(ev('这个报错怎么修呀')).wake, true, '昵称呼唤没有占唯一一次主动日额度')
+  state.now += 200000
+  assert.equal(p.evaluate(ev('这个报错怎么修呀')).skipped, 'daily-limit')
+  assert.equal(p.evaluate(ev('鱼鱼出来')).wake, true, '已耗尽主动预算仍可直接叫昵称')
+  assert.equal(p.evaluate(ev('这个报错怎么修呀')).skipped, 'daily-limit', '叫昵称也不会清空主动日预算')
+})
+
+test('昵称仍尊重暂停/安静时段/发言对象以及关闭或观察模式', () => {
+  const behavior = { aliases: ['鱼鱼'], activity: 'active' }
+  const expected = [
+    [{ participation: { enabled: false } }, 'disabled'],
+    [{ participation: { mode: 'off' } }, 'off'],
+    [{ participation: { mode: 'log' } }, 'log'],
+    [{ mode: 'work' }, 'not-chat'],
+    [{ now: at('23:30') }, 'quiet'],
+    [{ storeOverrides: { chatPreference: () => ({ proactiveUntil: at('13:00') }) } }, 'chat-paused'],
+    [{ storeOverrides: { memberPreference: () => ({ proactiveUntil: at('13:00') }) } }, 'member-paused'],
+  ]
+  for (const [options, reason] of expected) {
+    const { p } = env({ ...options, behavior })
+    assert.equal(p.evaluate(ev('鱼鱼出来')).skipped, reason)
+    assert.equal(p.snapshot().recent.at(-1).skipped, reason, '早退也进入诊断')
+  }
+  const { p } = env({ behavior })
+  assert.equal(p.evaluate(ev('鱼鱼你怎么看', { atOthers: ['u2'] })).skipped, 'addressed-other')
+  assert.equal(p.evaluate(ev('鱼鱼你怎么看', { replyTo: { sender: { id: 'u2' }, messageId: 'other' } })).skipped, 'addressed-other')
+})
+
+test('活跃档位动态生效，只调整主动新话题，quiet仍有少量主动机会', () => {
+  const behavior = { activity: 'inherit' }
+  const { p, state } = env({ behavior, participation: { dailyWakeLimit: 0 } })
+  assert.equal(p.evaluate(ev('怎么弄')).wake, false)
+  behavior.activity = 'active'
+  assert.equal(p.evaluate(ev('怎么弄')).wake, true, 'active放宽短问句的门槛')
+  state.now += 59999
+  assert.equal(p.evaluate(ev('怎么弄')).skipped, 'cooldown')
+  state.now += 1
+  assert.equal(p.evaluate(ev('怎么弄')).wake, true, 'active冷却减半')
+
+  const quiet = env({ behavior: { activity: 'quiet' }, participation: { dailyWakeLimit: 0 } })
+  assert.equal(quiet.p.evaluate(ev('怎么弄')).wake, false)
+  assert.equal(quiet.p.evaluate(ev('这个报错怎么修呀')).wake, true, '默认quiet阈值精确为0.60，内容充分的问句仍能触发')
+  quiet.state.now += 120000
+  assert.equal(quiet.p.evaluate(ev('这个报错怎么修呀')).skipped, 'cooldown')
+  quiet.p.observeReply({ chatKey: ev('').chatKey, senderId: 'u1', messageId: 'ours' })
+  assert.equal(quiet.p.evaluate(ev('没钱还吃饭')).wake, true, '延长主动冷却不阻断成功回执建立的续聊')
+  quiet.state.now += 120000
+  assert.equal(quiet.p.evaluate(ev('这个报错怎么修呀')).wake, true, 'quiet冷却为原值的两倍')
+})
+
+test('每个判断出口记录一次并调用诊断，失败回调不能改变准入或泄露正文到recent', async () => {
+  const cases = [
+    [{ participation: { enabled: false } }, ev('secret body'), 'disabled'],
+    [{ participation: { mode: 'off' } }, ev('secret body'), 'off'],
+    [{}, ev('secret body', { target: { kind: 'dm' } }), 'not-group'],
+    [{}, ev('secret body', { mentioned: true }), 'mentioned'],
+    [{ mode: 'work' }, ev('secret body'), 'not-chat'],
+    [{ now: at('23:30') }, ev('secret body'), 'quiet'],
+    [{}, ev('secret body', { atOthers: ['u2'] }), 'addressed-other'],
+    [{}, ev('谢谢'), 'conversation-ended'],
+    [{}, ev('闲聊'), 'low-score'],
+  ]
+  for (const [options, input, skipped] of cases) {
+    const calls = []
+    const { p } = env({ ...options, onDecision: (decision, event) => {
+      calls.push({ skipped: decision.skipped, event })
+      decision.wake = true
+      decision.reasons.push('changed by observer')
+      throw new Error('diagnostics unavailable')
+    } })
+    const result = p.evaluate(input)
+    assert.equal(result.wake, false)
+    assert.equal(result.skipped, skipped)
+    assert.ok(!result.reasons.includes('changed by observer'))
+    assert.deepEqual(calls, [{ skipped, event: input }])
+    const recent = p.snapshot().recent
+    assert.equal(recent.length, 1)
+    assert.equal(recent[0].skipped, skipped)
+    assert.ok(!JSON.stringify(recent).includes('secret body'))
+  }
+  const asyncObserver = env({ onDecision: () => Promise.reject(new Error('offline')) })
+  assert.equal(asyncObserver.p.evaluate(ev('这个报错怎么修呀')).wake, true)
+  await new Promise(resolve => setImmediate(resolve))
 })

@@ -13,6 +13,7 @@ import { createBridge } from '../lib/bridge.js'
 import { createControl } from '../lib/control.js'
 import { createRouter, parseCommand, stripMention } from '../lib/router.js'
 import { createParticipation } from '../lib/participation.js'
+import { normalizeOneBotEvent } from '../lib/onebot/wire.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
 async function setup(configOverrides = {}, { dshCommand = null, participation = null } = {}) {
@@ -102,6 +103,31 @@ test('短补充准入：不重复要求@，仍检查聊天授权且不放开命�
   const denied = await router.routeInbound({ ...ev, sender: { id: 'stranger' } })
   assert.notEqual(denied.handled, 'message')
   assert.equal(delivered.length, 1)
+})
+
+test('OneBot → router → participation：保留@别人，引用自己的短句能续聊', async () => {
+  const env = await setup({ participation: { enabled: true, mode: 'block', quietHours: '00:00-00:00' } })
+  const p = createParticipation({ config: env.config, store: env.store })
+  const router = createRouter({ ...env, participation: p })
+  const incoming = (message, senderId = '20', lookupReply = null) => normalizeOneBotEvent({
+    post_type: 'message', message_type: 'group', group_id: '10', user_id: senderId,
+    sender: { nickname: '普通群友' }, message_id: String(Math.random()), message,
+  }, { accountId: '99', lookupReply })
+  const directed = incoming([{ type: 'at', data: { qq: '40' } }, { type: 'text', data: { text: ' 这个报错怎么修呀' } }])
+  await env.store.setMode(directed.chatKey, 'chat')
+  assert.deepEqual(directed.atOthers, ['40'])
+  assert.deepEqual(directed.mentionedIds, ['40'])
+  assert.match(directed.text, /^@40/)
+  assert.equal((await router.routeInbound(directed)).handled, 'ignored')
+  assert.equal(env.agents.created.length, 0)
+
+  const addressed = incoming([{ type: 'at', data: { qq: '99' } }, { type: 'text', data: { text: '先聊这个' } }])
+  assert.equal((await router.routeInbound(addressed)).handled, 'message')
+  p.observeReply({ chatKey: addressed.chatKey, senderId: '20', messageId: 'sent-1', explicit: true })
+  const followup = incoming([{ type: 'reply', data: { id: 'sent-1' } }, { type: 'text', data: { text: '确实，我也这么想' } }])
+  assert.equal((await router.routeInbound(followup)).handled, 'message')
+  const otherReply = incoming([{ type: 'reply', data: { id: 'other-1' } }, { type: 'text', data: { text: '这个怎么修' } }], '20', () => ({ text: '问别人', sender: { id: '40' } }))
+  assert.equal((await router.routeInbound(otherReply)).handled, 'ignored')
 })
 
 test('免@群：block筛选聊天消息，log/off与work保留旧行为；命令不参与评分', async () => {

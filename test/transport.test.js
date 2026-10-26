@@ -34,12 +34,12 @@ test('chatKey：命名空间隔离（协议 + 账号）', () => {
   const dm = { kind: 'dm', userId: 'openid-1' }
   assert.equal(buildChatKey('qqbot', '102000001', dm), 'qqbot:102000001:dm:openid-1')
   assert.equal(buildChatKey('qqbot', '102000002', dm), 'qqbot:102000002:dm:openid-1')
-  assert.equal(buildChatKey('mock', '102000001', dm), 'mock:102000001:dm:openid-1')
+  assert.equal(buildChatKey('onebot', '102000001', dm), 'onebot:102000001:dm:openid-1')
   // 同一 openid 在不同协议/账号下互不碰撞
   const keys = new Set([
     buildChatKey('qqbot', '1', dm),
     buildChatKey('qqbot', '2', dm),
-    buildChatKey('mock', '1', dm),
+    buildChatKey('onebot', '1', dm),
   ])
   assert.equal(keys.size, 3)
   assert.equal(buildChatKey('QQBot', '1', dm), 'qqbot:1:dm:openid-1')
@@ -152,6 +152,7 @@ test('降级 transport 如实报错且状态可读', async () => {
   assert.equal(sent.ok, false)
   assert.match(sent.error, /不可用/)
 })
+
 
 test('chunkText：不劈开代理对（emoji），limit 非法时抛错', () => {
   // 每个 emoji 占 2 个 UTF-16 码元：limit=5 时切点若落在代理对中间会出乱码

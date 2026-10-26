@@ -32,9 +32,11 @@ jobs:
       - name: 语法检查（lib + test）
         run: |
           for file in $(git ls-files 'lib/*.js' 'test/**/*.js' 'scripts/*.mjs'); do node --check "$file"; done
+      - name: 协议模块隔离检查
+        run: node scripts/check-isolation.mjs
       - name: 全量测试
         run: node --test test/*.test.js
-      - name: 覆盖率（Node 内置，行覆盖门禁 90%）
+      - name: 覆盖率报告（Node 内置）
         run: node --test --experimental-test-coverage test/*.test.js
       - name: 打包检查（npm pack 只应包含 lib/README/NOTICE/LICENSE/patch）
         run: npm pack --dry-run

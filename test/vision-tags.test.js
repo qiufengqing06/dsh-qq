@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -28,7 +28,7 @@ async function setup(reply, stickers = {}) {
       ? {
         stream: async function* (options) {
           calls.push(options)
-          yield { type: 'text-delta', text: reply }
+          yield { type: 'text-delta', text: typeof reply === 'function' ? await reply(options) : reply }
           yield { type: 'finish', reason: { kind: 'stop' } }
         },
       }
@@ -37,7 +37,7 @@ async function setup(reply, stickers = {}) {
         : null,
   }
   const tagger = createStickerTagger({ ctx, config, store })
-  return { store, id, tagger, calls }
+  return { dir, config, ctx, store, id, tagger, calls }
 }
 
 test('parseTagJson：解析 kind/tags/desc，拒绝非 JSON', () => {
@@ -83,4 +83,60 @@ test('视觉补打：tagPending 处理已入库未打标图片', async () => {
   assert.equal(result.tried, 1)
   assert.equal(result.tagged, 1)
   assert.ok(env.store.itemOf(env.id).tags.includes('猫猫'))
+})
+
+test('全图库补全翻过完整首页，已收藏有标签但缺描述的图片也补全且不自动丢弃', async t => {
+  const env = await setup('{"kind":"other","tags":["截图"],"desc":"收藏的角色截图"}')
+  t.after(() => rm(env.dir, { recursive: true, force: true }))
+  await env.store.promote(env.id)
+  await env.store.setMeta(env.id, { tags: ['我的收藏'] })
+  const offsets = []
+  const pagedStore = { ...env.store, listAll: (limit, { offset }) => {
+    offsets.push(offset)
+    assert.equal(limit, 500)
+    return offset === 0
+      ? Array.from({ length: 500 }, (_, i) => ({ id: `complete-${i}`, state: 'library', tags: ['开心'], desc: '已有描述' }))
+      : [env.store.itemOf(env.id)]
+  } }
+  const tagger = createStickerTagger({ ctx: env.ctx, config: env.config, store: pagedStore })
+  assert.deepEqual(await tagger.tagPending(), { tagged: 1, tried: 1 })
+  assert.deepEqual(offsets, [0, 500])
+  assert.equal(env.store.itemOf(env.id).desc, '收藏的角色截图')
+  assert.ok(env.store.itemOf(env.id).tags.includes('我的收藏'))
+  assert.equal(env.store.itemOf(env.id).state, 'library', '人工收藏不会因模型分类被移入回收站')
+})
+
+test('视觉队列按图片去重并显示进度，异步结果不覆盖人工编辑或复活已删除图', async t => {
+  for (const action of ['edit', 'remove']) await t.test(action, async t => {
+    let release, started
+    const waiting = new Promise(resolve => { started = resolve })
+    const env = await setup(async () => {
+      started()
+      return new Promise(resolve => { release = () => resolve('{"kind":"other","tags":["截图"],"desc":"模型旧描述"}') })
+    })
+    t.after(() => rm(env.dir, { recursive: true, force: true }))
+    const job = env.tagger.tag(env.id)
+    assert.equal(env.tagger.tag(env.id), job)
+    const invalid = env.tagger.tag('missing-image')
+    await waiting
+    assert.deepEqual(env.tagger.snapshot(), { running: true, pending: 1, completed: 0, failed: 0, lastError: '' })
+    if (action === 'edit') await env.store.setMeta(env.id, { tags: ['人工标签'], desc: '人工新描述' })
+    else await env.store.remove(env.id)
+    release()
+    assert.equal(await job, action === 'edit')
+    assert.equal(await invalid, false)
+    assert.equal(env.calls.length, 1, '重复排队不重复请求视觉模型')
+    if (action === 'edit') {
+      const item = env.store.itemOf(env.id)
+      assert.equal(item.desc, '人工新描述')
+      assert.deepEqual(item.tags, ['人工标签'])
+      assert.equal(item.state, 'candidate')
+    } else assert.equal(env.store.itemOf(env.id), null)
+    const progress = env.tagger.snapshot()
+    assert.equal(progress.running, false)
+    assert.equal(progress.pending, 0)
+    assert.equal(progress.completed, action === 'edit' ? 1 : 0)
+    assert.equal(progress.failed, action === 'edit' ? 1 : 2)
+    assert.doesNotMatch(progress.lastError, /模型旧描述|人工新描述|missing-image/)
+  })
 })

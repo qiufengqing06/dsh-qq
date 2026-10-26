@@ -1717,6 +1717,11 @@
     if (badge) badge.textContent = String(counts.total || 0);
     if (note) note.textContent = '候选 ' + (counts.candidates || 0) + ' · 收藏 ' + (counts.library || 0) + ' · 回收站 ' + (counts.trash || 0) + ' · ' + Math.round((counts.bytes || 0) / 1024) + ' KB';
     host.appendChild(el('div', { className: 'hint', style: 'margin-bottom:10px', text: '自动收藏的是群/私聊里的所有图片，不区分表情包和截图；候选不会自动发。请用标签/收藏整理，不是表情包的丢回收站。' }));
+    if (S.config && S.config.stickers && S.config.stickers.vision && S.config.stickers.vision.enabled !== false) {
+      host.appendChild(btn('补打标签（已入库的旧图）', 'quiet sm', function () {
+        stickerAction({ action: 'tagPending', limit: 20 }, '正在排队补打标签，稍后刷新');
+      }));
+    }
     var tabs = el('div', { className: 'actions', style: 'margin-bottom:10px;flex-wrap:wrap' });
     [['all', '全部'], ['candidate', '待整理'], ['library', '收藏'], ['trash', '回收站']].forEach(function (pair) {
       var count = pair[0] === 'all' ? counts.total : pair[0] === 'candidate' ? counts.candidates : counts[pair[0]];
@@ -1738,7 +1743,8 @@
       card.appendChild(img);
       card.appendChild(el('div', { className: 'sub mono', style: 'margin-top:6px;overflow:hidden;text-overflow:ellipsis', title: item.id, text: item.id.slice(0, 16) + '…' }));
       card.appendChild(el('div', { className: 'sub', style: 'min-height:18px', text: item.tags.join(' / ') || '无标签' }));
-      card.appendChild(el('div', { className: 'hint', style: 'min-height:18px;overflow:hidden;text-overflow:ellipsis', title: item.sourceText, text: item.sourceText ? '来源：' + item.sourceText : '来源：未知' }));
+      var source = item.sourceText || (item.sourceName ? item.sourceName + ' 发' : (item.sourceAt ? '群聊图片' : '未知'));
+      card.appendChild(el('div', { className: 'hint', style: 'min-height:18px;overflow:hidden;text-overflow:ellipsis', title: source, text: '来源：' + source }));
       var actions = el('div', { className: 'actions', style: 'margin-top:6px;gap:4px;flex-wrap:wrap' });
       if (item.state === 'candidate') actions.appendChild(btn('收藏', 'sm', function () { stickerAction({ action: 'keep', id: item.id }, '已移入收藏'); }));
       if (item.state === 'trash') actions.appendChild(btn('恢复', 'sm', function () { stickerAction({ action: 'restore', id: item.id }, '已恢复到候选'); }));

@@ -72,3 +72,11 @@ test('视觉打标：关闭/非法 JSON 不改变图片', async () => {
   assert.equal(await bad.tagger.tag(bad.id), false)
   assert.equal(bad.store.itemOf(bad.id).tags.length, 0)
 })
+
+test('视觉补打：tagPending 处理已入库未打标图片', async () => {
+  const env = await setup('{"kind":"sticker","tags":["猫猫"],"desc":"猫猫"}')
+  const result = await env.tagger.tagPending({ limit: 5 })
+  assert.equal(result.tried, 1)
+  assert.equal(result.tagged, 1)
+  assert.ok(env.store.itemOf(env.id).tags.includes('猫猫'))
+})

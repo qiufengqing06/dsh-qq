@@ -136,6 +136,70 @@ test('参与续聊不绕过ACL，未授权群友不占冷却或续聊名额', as
   assert.equal((await freeRouter.routeInbound(denied)).handled, 'rejected', '免@群仍显示原有白名单拒绝结果')
 })
 
+test('完整续聊链：真实出站回执维持八轮接话，主动日额度耗尽只拦新话题', { timeout: 5000 }, async () => {
+  const env = await setup({
+    freeReplyGroups: ['g1'],
+    participation: { enabled: true, mode: 'block', dailyWakeLimit: 1, quietHours: '00:00-00:00' },
+  })
+  let now = new Date(2026, 9, 26, 12).getTime()
+  const clock = () => now
+  const p = createParticipation({ config: env.config, store: env.store, clock })
+  const receipts = []
+  let resolveReply
+  const bridge = createBridge({
+    ...env, clock, chatInputWindowMs: 0, sleep: async () => {}, random: () => 0,
+    onReply: record => {
+      p.observeReply(record)
+      receipts.push(record)
+      resolveReply?.(record)
+    },
+  })
+  const router = createRouter({ ...env, bridge, participation: p })
+  const target = { kind: 'group', groupId: 'g1' }
+  let inputId = 0
+  const input = (text, senderId = 'member-1') => env.transport.inject({
+    target, sender: { id: senderId, name: '群友' }, text, mentioned: false, messageId: `incoming-${++inputId}`,
+  })
+  const output = () => env.transport.dump().filter(item => item.kind === 'text')
+  try {
+    const first = input('这个报错怎么修呀')
+    await env.store.setMode(first.chatKey, 'chat')
+    const reply = async (message, answer, expectedCount) => {
+      assert.equal((await router.routeInbound(message)).handled, 'message', `第 ${expectedCount} 次输入应进入真实 bridge`)
+      const agent = env.agents.live.get(bridge.currentSession(message.chatKey))
+      const sent = new Promise(resolve => { resolveReply = resolve })
+      agent.reply(answer).ctx.emitStatus('idle')
+      const receipt = await sent
+      await new Promise(resolve => setImmediate(resolve))
+      resolveReply = null
+      assert.equal(receipt.senderId, 'member-1')
+      assert.equal(receipt.explicit, false, '整个测试没有显式 @ 重置额度')
+      assert.match(receipt.messageId, /^mock-\d+$/, '来自 mock transport 的真实发送回执')
+      assert.equal(output().length, expectedCount)
+      assert.equal(output().at(-1).text, answer)
+      assert.equal(bridge.isBusy(message.chatKey), false, '等待回发链完成再进入下一轮')
+    }
+    await reply(first, '我看看', 1)
+    assert.deepEqual(p.snapshot().recent[0].reasons, ['question', 'length'], '初次确实是自主唤醒并消耗唯一日额度')
+    const lines = ['没钱还吃饭', '不是，又冷暴力我', '出列，说话，蓝色大肥鱼']
+    for (let i = 0; i < 8; i++) {
+      now += 90_000
+      await reply(input(lines[i % lines.length]), `第${i + 1}轮接上了`, i + 2)
+      assert.deepEqual(p.snapshot().recent.at(-1).reasons, ['continuation'])
+    }
+    assert.equal(receipts.length, 9)
+    assert.equal(env.agents.created.length, 1, '持续复用同一个真实假会话')
+    assert.equal(env.agents.live.get(bridge.currentSession(first.chatKey)).followed.length, 9)
+    assert.deepEqual(await router.routeInbound(input('这个报错怎么修呀', 'other-member')), { handled: 'ignored', reason: 'participation' })
+    assert.equal(p.snapshot().recent.at(-1).skipped, 'daily-limit', '旁人的新话题仍受已耗尽的主动额度约束')
+    assert.equal((await router.routeInbound(input('先别说了'))).handled, 'ignored')
+    assert.equal(p.snapshot().recent.at(-1).skipped, 'conversation-ended')
+    assert.equal((await router.routeInbound(input('没钱还吃饭'))).handled, 'ignored', '停止语关闭续聊窗口')
+    assert.equal(output().length, 9)
+    assert.equal(receipts.length, 9)
+  } finally { await env.scope.dispose() }
+})
+
 test('群消息未 @机器人 → 静默忽略', async () => {
   const { router, transport, agents } = await setup()
   const ev = transport.inject({

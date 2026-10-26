@@ -205,6 +205,32 @@ test('先排除重复再选图；英文标签兼容中文，同轮两张与轮�
   assert.match((await env.store.send(sendOptions(env, { id: a.id, turnId: 'turn-2' }))).error, /最近发过/)
 })
 
+test('默认表情节奏：30秒可换图，每轮仍限2张、每天30张且同图去重', async t => {
+  let now = new Date(2026, 9, 26, 12).getTime()
+  const env = await setup({ clock: () => now })
+  t.after(() => rm(env.dir, { recursive: true, force: true }))
+  const items = []
+  for (let i = 1; i <= 31; i++) items.push(await addSticker(env, i))
+  const send = (i, turnId) => env.store.send(sendOptions(env, { id: items[i].id, turnId }))
+  assert.equal((await send(0, 'first')).ok, true)
+  assert.equal((await send(1, 'first')).ok, true)
+  assert.match((await send(2, 'first')).error, /本轮.*上限/)
+  now += 29_999
+  assert.match((await send(2, 'next')).error, /冷却/)
+  now += 1
+  assert.equal((await send(2, 'next')).ok, true)
+  assert.match((await send(0, 'next')).error, /最近发过/)
+  for (let i = 3; i < 30; i++) {
+    now += 30_000
+    assert.equal((await send(i, `turn-${i}`)).ok, true)
+  }
+  now += 30_000
+  assert.match((await send(30, 'over-limit')).error, /今日表情额度/)
+  assert.equal(env.sent.length, 30)
+  now += 24 * 60 * 60 * 1000
+  assert.equal((await send(30, 'tomorrow')).ok, true)
+})
+
 test('人设精选优先匹配，但不适合或已发过时回退普通图库', async () => {
   let selected = []
   const env = await setup({ preferredIdsForChat: () => selected, stickers: { send: { perTurnMax: 5, cooldownMs: 0 } } })

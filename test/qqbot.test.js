@@ -19,6 +19,7 @@ import {
 } from '../lib/qqbot.js'
 import { startFakeQQServer } from './helpers/fake-qq-server.js'
 import { createFakeCtx, createLogger } from './helpers/fake-ctx.js'
+import { stripMention } from '../lib/router.js'
 
 const tick = (ms = 25) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -127,6 +128,42 @@ test('normalizeDispatch：私聊 / 群 @ / 频道 / 附件 / 忽略未知', () =
 
   assert.equal(normalizeDispatch('C2C_MESSAGE_CREATE', { id: 'm4' }, 'app-1'), null, '缺 user_openid 应忽略')
   assert.equal(normalizeDispatch('SOMETHING_ELSE', { id: 'm5' }, 'app-1'), null)
+})
+
+test('官方频道提及使用可信自身ID，保留其他群友而不把AppID当QQ身份', () => {
+  const raw = {
+    id: 'quoted-command', guild_id: 'guild', channel_id: 'channel', author: { id: 'user' },
+    content: '<@!bot-user> /qq-help', mentions: [{ id: 'bot-user' }],
+  }
+  const unknown = normalizeDispatch('GUILD_AT_MESSAGE_CREATE', raw, 'app-1')
+  assert.equal(unknown.selfId, '')
+  assert.equal(stripMention(unknown.text, unknown), raw.content, '未知自身ID时不猜')
+  const known = normalizeDispatch('GUILD_AT_MESSAGE_CREATE', raw, 'app-1', { selfId: 'bot-user' })
+  assert.equal(known.selfId, 'bot-user')
+  assert.deepEqual(known.mentionedIds, ['bot-user'])
+  assert.deepEqual(known.atOthers, [])
+  assert.equal(stripMention(known.text, known), '/qq-help')
+  const other = normalizeDispatch('GUILD_AT_MESSAGE_CREATE', { ...raw, content: '<@!friend> <@!bot-user> 你好' }, 'app-1', { selfId: 'bot-user' })
+  assert.deepEqual(other.atOthers, ['friend'])
+  assert.equal(stripMention(other.text, other), '<@!friend> <@!bot-user> 你好')
+})
+
+test('READY自身用户ID传入频道事件，AppID仅用作账号命名空间', async t => {
+  const env = await setup()
+  t.after(() => cleanup(env))
+  const received = []
+  env.transport.onMessage(event => received.push(event))
+  await env.transport.start()
+  await tick(50)
+  env.server.pushDispatch('GUILD_AT_MESSAGE_CREATE', {
+    id: 'ready-self-message', guild_id: 'guild', channel_id: 'channel', author: { id: 'user' },
+    content: '<@!bot-1> /qq-help',
+  })
+  await tick()
+  assert.equal(received.length, 1)
+  assert.equal(received[0].accountId, 'app-1')
+  assert.equal(received[0].selfId, 'bot-1')
+  assert.equal(stripMention(received[0].text, received[0]), '/qq-help')
 })
 
 test('normalizeInteraction：按钮回调归属到正确 target', () => {

@@ -44,6 +44,8 @@ test('parseTagJson：解析 kind/tags/desc，拒绝非 JSON', () => {
   assert.deepEqual(parseTagJson('```json\n{"kind":"sticker","tags":["猫猫","开心"],"desc":"猫猫开心"}\n```'), { kind: 'sticker', tags: ['猫猫', '开心'], desc: '猫猫开心' })
   assert.equal(parseTagJson('随便说说'), null)
   assert.equal(parseTagJson('{"kind":"other","tags":["截图"]}').kind, 'other')
+  assert.deepEqual(parseTagJson('{"kind":"sticker","tags":["happy","开心","smug"],"desc":"捧着饭碗的鲸鱼"}').tags, ['开心', '得意'])
+  assert.deepEqual(parseTagJson('{"kind":"sticker","tags":["constructor","__proto__"]}').tags, ['constructor', '__proto__'])
 })
 
 test('视觉打标：表情包加标签；截图自动移回收站；调用 deepseek-flash', async () => {
@@ -55,6 +57,8 @@ test('视觉打标：表情包加标签；截图自动移回收站；调用 deep
   assert.equal(sticker.calls[0].provider, 'deepseek-account')
   assert.equal(sticker.calls[0].model, 'deepseek-flash')
   assert.equal(sticker.calls[0].messages[0].content[1].type, 'image')
+  assert.match(sticker.calls[0].messages[0].content[0].text, /中文用途标签/)
+  assert.match(sticker.calls[0].messages[0].content[0].text, /图中文字/)
 
   const other = await setup('{"kind":"other","tags":["截图"],"desc":"数据截图"}')
   assert.equal(await other.tagger.tag(other.id), true)

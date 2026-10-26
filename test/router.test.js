@@ -12,6 +12,7 @@ import { createApprovalRegistry } from '../lib/approval.js'
 import { createBridge } from '../lib/bridge.js'
 import { createControl } from '../lib/control.js'
 import { createRouter, parseCommand, stripMention } from '../lib/router.js'
+import { createParticipation } from '../lib/participation.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
 
 async function setup(configOverrides = {}, { dshCommand = null, participation = null } = {}) {
@@ -44,8 +45,13 @@ test('parseCommand / stripMention', () => {
   assert.deepEqual(parseCommand('/qq-model p/m --default').positional, ['p/m'])
   assert.equal(parseCommand('你好'), null)
   assert.equal(parseCommand('   '), null)
-  assert.equal(stripMention('<@!123> /qq-help'), '/qq-help')
-  assert.equal(stripMention('@bot 你好'), '你好')
+  assert.equal(stripMention('<@!123> /qq-help', { selfId: '123' }), '/qq-help')
+  assert.equal(stripMention('@bot 你好', { selfId: 'bot' }), '你好')
+  assert.equal(stripMention('@other 你好', { selfId: 'bot' }), '@other 你好')
+  assert.equal(stripMention('<@!other> /qq-help', { selfId: 'bot' }), '<@!other> /qq-help')
+  assert.equal(stripMention('@unknown 你好'), '@unknown 你好', '没有已知自身标识时不猜测对象')
+  assert.equal(stripMention('<@!bot> @other 你好', { selfId: 'bot' }), '@other 你好')
+  assert.equal(stripMention('<@!app-1> /qq-help', { transportKind: 'qqbot', accountId: 'app-1' }), '<@!app-1> /qq-help', '官方AppID不是自身用户ID')
 })
 
 test('参与判断：wake=true 才进 bridge，命令仍不参与', async () => {
@@ -78,6 +84,38 @@ test('参与判断：wake=true 才进 bridge，命令仍不参与', async () => 
     mentioned: false,
   })
   assert.deepEqual(await router.routeInbound(command), { handled: 'ignored', reason: 'not-mentioned' })
+})
+
+test('免@群：block筛选聊天消息，log/off与work保留旧行为；命令不参与评分', async () => {
+  for (const mode of ['block', 'log', 'off']) {
+    const env = await setup({ freeReplyGroups: ['g1'], participation: { enabled: true, mode, quietHours: '00:00-00:00' } })
+    const p = createParticipation({ config: env.config, store: env.store })
+    const router = createRouter({ ...env, participation: p })
+    const input = env.transport.inject({ target: { kind: 'group', groupId: 'g1' }, sender: { id: 'owner-1' }, text: '这是随口说的话', mentioned: false })
+    await env.store.setMode(input.chatKey, 'chat')
+    assert.equal((await router.routeInbound(input)).handled, mode === 'block' ? 'ignored' : 'message', mode)
+    const before = p.snapshot().recent.length
+    assert.equal((await router.routeInbound({ ...input, text: '/qq-help' })).handled, 'command')
+    assert.equal(p.snapshot().recent.length, before, '控制命令不评分')
+    await env.store.setMode(input.chatKey, 'work')
+    assert.equal((await router.routeInbound(input)).handled, 'message', 'work免@行为不改变')
+  }
+})
+
+test('参与续聊不绕过ACL，未授权群友不占冷却或续聊名额', async () => {
+  const env = await setup({ pairingPolicy: 'allowlist', participation: { enabled: true, mode: 'block', quietHours: '00:00-00:00' } })
+  const p = createParticipation({ config: env.config, store: env.store })
+  const router = createRouter({ ...env, participation: p })
+  const denied = env.transport.inject({ target: { kind: 'group', groupId: 'g1' }, sender: { id: 'stranger' }, text: '这个报错怎么修呀', mentioned: false })
+  await env.store.setMode(denied.chatKey, 'chat')
+  p.observeReply({ chatKey: denied.chatKey, senderId: 'stranger', messageId: 'previous' })
+  assert.equal((await router.routeInbound(denied)).handled, 'ignored')
+  assert.equal(env.agents.created.length, 0)
+  assert.equal(p.snapshot().recent.length, 0)
+  assert.equal((await router.routeInbound({ ...denied, sender: { id: 'owner-1' } })).handled, 'message')
+  const freeConfig = { ...env.config, freeReplyGroups: ['g1'] }
+  const freeRouter = createRouter({ ...env, config: freeConfig, participation: p })
+  assert.equal((await freeRouter.routeInbound(denied)).handled, 'rejected', '免@群仍显示原有白名单拒绝结果')
 })
 
 test('群消息未 @机器人 → 静默忽略', async () => {

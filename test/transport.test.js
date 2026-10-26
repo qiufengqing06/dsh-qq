@@ -86,6 +86,9 @@ test('归一化入站事件形状与冻结', () => {
     replyTo: { messageId: 'm0', text: '引用' },
     media: [{ kind: 'image', url: 'https://example.invalid/a.png', size: 10 }],
     mentioned: true,
+    selfId: 'self',
+    mentionedIds: ['self', 'u2', 'u2'],
+    atOthers: ['u2'],
   })
   assert.equal(ev.chatKey, 'mock:acct:dm:u1')
   assert.equal(ev.messageId, 'm1')
@@ -93,6 +96,11 @@ test('归一化入站事件形状与冻结', () => {
   assert.equal(ev.replyTo.text, '引用')
   assert.equal(ev.media[0].kind, 'image')
   assert.equal(ev.mentioned, true)
+  assert.equal(ev.selfId, 'self')
+  assert.deepEqual(ev.mentionedIds, ['self', 'u2'])
+  assert.deepEqual(ev.atOthers, ['u2'])
+  assert.ok(Object.isFrozen(ev.mentionedIds))
+  assert.ok(Object.isFrozen(ev.atOthers))
   assert.ok(Object.isFrozen(ev))
   assert.ok(Object.isFrozen(ev.target))
   assert.ok(Object.isFrozen(ev.media))

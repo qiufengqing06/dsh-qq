@@ -99,6 +99,63 @@ test('动态上下文：格式为「时间 [昵称|QQ号] 内容」，昵称走 
   assert.match(pending.text, /^\d{2}:\d{2} \[秋 月明骗子\|44444\] 我是秦始皇$/, '昵称清洗 + QQ 号身份锚点')
 })
 
+test('聊天缓冲保留消息/引用/提及关系，work展示保持兼容', async () => {
+  const { memory } = await setup()
+  const related = {
+    ...groupEvent('鱼要另算'), messageId: 'm2',
+    replyTo: { messageId: 'm1', sender: { id: '50005', name: '另一位群友' } },
+    mentionedIds: ['50005'],
+  }
+  memory.observe(related, 'chat')
+  memory.observe({ ...related, messageId: 'work-1' }, 'work')
+  const recent = memory.recentMessages(GROUP)
+  assert.equal(recent.length, 1)
+  assert.equal(recent[0].messageId, 'm2')
+  assert.deepEqual(recent[0].replyTo, related.replyTo)
+  assert.deepEqual(recent[0].mentionedIds, ['50005'])
+  recent[0].sender.name = '篡改副本'
+  recent[0].replyTo.sender.id = 'wrong'
+  recent[0].mentionedIds.push('wrong')
+  const chat = memory.pendingContext(GROUP, 'chat')
+  assert.equal(chat.count, 1, 'recentMessages不推进读取水位')
+  assert.match(chat.text, /id="m2"/)
+  assert.match(chat.text, /回复="m1"/)
+  assert.match(chat.text, /引用作者="50005"/)
+  assert.match(chat.text, /提及=\["50005"\]/)
+  assert.doesNotMatch(chat.text, /wrong|篡改/)
+  assert.equal(memory.recentMessages(GROUP).length, 1, '注入后仍可校验近期可引用ID')
+  const work = memory.pendingContext(GROUP, 'work')
+  assert.match(work.text, /^\d{2}:\d{2} \[小明\|40004\] 鱼要另算$/)
+  assert.equal(memory.recentMessages(OTHER_GROUP).length, 0)
+})
+
+test('成功出站进入同一有界缓冲，图片说明和自身标记可读且不消费旧水位', async () => {
+  const { memory } = await setup({ groupMemory: { bufferMessages: 3 } })
+  memory.observe({ ...groupEvent('第一句'), messageId: 'in-1' }, 'chat')
+  const outbound = {
+    chatKey: GROUP, target: { kind: 'group', groupId: '30003' },
+    messageId: 'out-1', text: '抱头惊慌的角色', selfId: '10001', media: [{ kind: 'image' }],
+    replyTo: { messageId: 'in-1' },
+  }
+  assert.equal(memory.observeOutbound(outbound), true)
+  assert.equal(memory.observeOutbound(outbound), false, '同一成功回执不重复记入')
+  const pending = memory.pendingContext(GROUP, 'chat')
+  assert.equal(pending.count, 2)
+  assert.match(pending.text, /第一句/)
+  assert.match(pending.text, /本实例已发送/)
+  assert.match(pending.text, /抱头惊慌的角色\[图片\]/)
+  assert.equal(memory.pendingContext(GROUP, 'chat').count, 0)
+  assert.equal(memory.pendingContext(GROUP, 'work').count, 0)
+  memory.observe({ ...groupEvent('后续一句'), messageId: 'in-2' }, 'chat')
+  memory.observeOutbound({ ...outbound, messageId: 'out-2', text: '把账单收起来' })
+  const recent = memory.recentMessages(GROUP)
+  assert.deepEqual(recent.map(entry => entry.messageId), ['out-1', 'in-2', 'out-2'])
+  assert.equal(recent[0].outbound, true)
+  assert.equal(recent[0].sender.id, '10001')
+  assert.equal(memory.pendingContext(GROUP, 'chat').count, 2, '只注入本次新增条目')
+  assert.equal(memory.observeOutbound({ ...outbound, target: { kind: 'dm', userId: 'u1' } }), false)
+})
+
 test('群笔记按模式分开：work/chat 各写各的文件', async () => {
   const { memory, dir } = await setup()
   assert.equal((await memory.editNotes(GROUP, { action: 'add', text: '工作群笔记' }, 'work')).ok, true)

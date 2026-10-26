@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtemp, readFile, readdir } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -10,10 +10,10 @@ import { createStickerTools } from '../lib/sticker-tools.js'
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 1)])
 
-async function setup({ stickers = {}, groupId = '100' } = {}) {
+async function setup({ stickers = {}, groupId = '100', clock = () => Date.now() } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-stickers-'))
   const config = resolveConfig({ transport: 'mock', dataDir: dir, autoConnect: false, stickers })
-  const store = createStickerStore({ dir, config })
+  const store = createStickerStore({ dir, config, clock })
   await store.load()
   const sent = []
   const transport = {
@@ -30,6 +30,20 @@ async function setup({ stickers = {}, groupId = '100' } = {}) {
     messageId: 'msg1', text: '这个图好', media: [{ kind: 'image', url: 'https://example.com/x.png' }],
   }
   return { dir, config, store, transport, sent, download, ev }
+}
+
+async function addSticker(env, marker, tags = ['开心']) {
+  const data = Buffer.concat([PNG, Buffer.from([marker])])
+  await env.store.capture({ ...env.ev, messageId: `image-${marker}` }, {
+    mode: 'chat', download: async () => ({ ok: true, data, contentType: 'image/png' }),
+  })
+  const item = env.store.listAll().find(item => env.store.itemOf(item.id).sources.some(source => source.messageId === `image-${marker}`))
+  await env.store.setMeta(item.id, { tags, desc: `小鲸鱼第${marker}张图，笑着捧饭碗` })
+  return { id: item.id, data }
+}
+
+function sendOptions(env, extra = {}) {
+  return { chatKey: env.ev.chatKey, target: env.ev.target, transport: env.transport, mode: 'chat', ...extra }
 }
 
 test('图片类型只用魔数判断，SVG/文本拒绝', () => {
@@ -142,4 +156,134 @@ test('私聊图片也收藏，但只在本私聊可见（不跨群）', async ()
   assert.equal(env.store.list(dm.chatKey).length, 1)
   assert.equal(env.store.list('qqbot:1:dm:other').length, 0)
   assert.equal(env.store.list('qqbot:1:group:200').length, 0, '私聊图不跨群')
+})
+
+test('先排除重复再选图；英文标签兼容中文，同轮两张与轮间冷却分开', async () => {
+  let now = Date.now()
+  const env = await setup({ clock: () => now, stickers: { send: { perTurnMax: 2, cooldownMs: 1000 } } })
+  const a = await addSticker(env, 1, ['happy'])
+  const b = await addSticker(env, 2)
+  const c = await addSticker(env, 3)
+  assert.deepEqual(env.store.itemOf(a.id).tags, ['开心'])
+  assert.equal((await env.store.send(sendOptions(env, { id: a.id, turnId: 'turn-1' }))).ok, true)
+  const available = env.store.list(env.ev.chatKey, { query: 'happy', turnId: 'turn-1' })
+  assert.equal(available.length, 3)
+  assert.equal(available[0].available, true)
+  assert.equal(available.at(-1).id, a.id)
+  assert.match(available.at(-1).reason, /最近发过/)
+  const second = await env.store.send(sendOptions(env, { tag: 'happy', turnId: 'turn-1' }))
+  assert.equal(second.ok, true)
+  assert.notEqual(second.id, a.id)
+  assert.match(second.desc, /笑着捧饭碗/)
+  assert.equal(second.messageId, 'm1')
+  const remaining = [b.id, c.id].find(id => id !== second.id)
+  assert.match((await env.store.send(sendOptions(env, { id: remaining, turnId: 'turn-1' }))).error, /本轮.*上限/)
+  assert.match((await env.store.send(sendOptions(env, { id: remaining, turnId: 'turn-2' }))).error, /冷却/)
+  now += 1001
+  assert.equal((await env.store.send(sendOptions(env, { id: remaining, turnId: 'turn-2' }))).ok, true)
+  assert.match((await env.store.send(sendOptions(env, { id: a.id, turnId: 'turn-2' }))).error, /最近发过/)
+})
+
+test('同对话并发发送串行复查每轮与日额度，不让两个工具同时抢到额度', async () => {
+  const env = await setup({ stickers: { send: { perTurnMax: 2, cooldownMs: 0, dailyPerChat: 2 } } })
+  const images = await Promise.all([1, 2, 3].map(marker => addSticker(env, marker)))
+  let active = 0
+  let peak = 0
+  env.transport.sendMedia = async () => {
+    active += 1
+    peak = Math.max(peak, active)
+    await new Promise(resolve => setTimeout(resolve, 5))
+    active -= 1
+    return { ok: true }
+  }
+  const results = await Promise.all(images.map(image => env.store.send(sendOptions(env, { id: image.id, turnId: 'same-turn' }))))
+  assert.equal(results.filter(result => result.ok).length, 2)
+  assert.equal(peak, 1)
+  assert.match(results[2].error, /本轮.*上限/)
+  assert.match((await env.store.send(sendOptions(env, { id: images[2].id, turnId: 'next-turn' }))).error, /今日.*额度/)
+})
+
+test('排队期间取消或临发复查失效，未发图不占额度；已在途的发送正常记账', async () => {
+  const env = await setup({ stickers: { send: { perTurnMax: 2, cooldownMs: 0 } } })
+  const a = await addSticker(env, 1)
+  const b = await addSticker(env, 2)
+  let valid = true
+  let release
+  let started
+  const inFlight = new Promise(resolve => { started = resolve })
+  env.transport.sendMedia = () => new Promise(resolve => {
+    started()
+    release = () => resolve({ ok: true })
+  })
+  const first = env.store.send(sendOptions(env, { id: a.id, turnId: 't', isValid: () => valid }))
+  await inFlight
+  const second = env.store.send(sendOptions(env, { id: b.id, turnId: 't', isValid: () => valid }))
+  valid = false
+  release()
+  assert.equal((await first).ok, true)
+  assert.match((await second).error, /取消|权限/)
+  assert.equal(env.store.itemOf(b.id).sendCount, 0)
+  env.transport.sendMedia = async () => ({ ok: true })
+  let checks = 0
+  assert.equal((await env.store.send(sendOptions(env, { id: b.id, turnId: 't', isValid: () => ++checks < 2 }))).ok, false)
+  assert.equal(env.store.itemOf(b.id).sendCount, 0)
+  assert.equal((await env.store.send(sendOptions(env, { id: b.id, turnId: 't' }))).ok, true)
+})
+
+test('平台发送失败不占额度，后续同图可重试；已发送轮次额度重载后仍生效', async () => {
+  const env = await setup({ stickers: { send: { perTurnMax: 1, cooldownMs: 0 } } })
+  const a = await addSticker(env, 1)
+  const b = await addSticker(env, 2)
+  env.transport.sendMedia = async () => ({ ok: false, error: '网络暂时不可用' })
+  assert.equal((await env.store.send(sendOptions(env, { id: a.id, turnId: 't' }))).ok, false)
+  assert.equal(env.store.itemOf(a.id).sendCount, 0)
+  env.transport.sendMedia = async () => ({ ok: true })
+  assert.equal((await env.store.send(sendOptions(env, { id: a.id, turnId: 't' }))).ok, true)
+  const restored = createStickerStore({ dir: env.dir, config: env.config })
+  assert.match((await restored.send(sendOptions(env, { id: b.id, turnId: 't' }))).error, /本轮.*上限/)
+})
+
+test('兼容旧发送时间数组，按真实历史执行冷却和日预算', async () => {
+  const now = Date.now()
+  const env = await setup({ clock: () => now })
+  const a = await addSticker(env, 1)
+  await writeFile(join(env.dir, 'stickers', 'state.json'), JSON.stringify({ sent: { [env.ev.chatKey]: [now - 10] }, used: {} }))
+  const restored = createStickerStore({ dir: env.dir, config: env.config, clock: () => now })
+  assert.match((await restored.send(sendOptions(env, { id: a.id, turnId: 'new' }))).error, /冷却/)
+})
+
+test('平台已发送后索引落盘失败仍返回真实成功，额度记录防止重复补发', async () => {
+  const env = await setup({ stickers: { send: { perTurnMax: 1, cooldownMs: 0 } } })
+  const image = await addSticker(env, 1)
+  env.transport.sendMedia = async () => {
+    await rm(env.store.indexPath())
+    await mkdir(env.store.indexPath())
+    return { ok: true, messageId: 'already-sent' }
+  }
+  const result = await env.store.send(sendOptions(env, { id: image.id, turnId: 't' }))
+  assert.equal(result.ok, true)
+  assert.equal(result.messageId, 'already-sent')
+  assert.equal(env.store.describeImage(env.ev.chatKey, image.data).wasSentHere, true)
+  assert.match((await env.store.send(sendOptions(env, { id: image.id, turnId: 't' }))).error, /本轮.*上限/)
+  const saved = JSON.parse(await readFile(join(env.dir, 'stickers', 'state.json'), 'utf8'))
+  assert.equal(saved.sent[env.ev.chatKey][0].turnId, 't')
+})
+
+test('同图说明遵守来源权限，其他群可共享画面但看不到本群发送历史', async () => {
+  const env = await setup()
+  const a = await addSticker(env, 1)
+  assert.equal(env.store.describeImage(env.ev.chatKey, a.data).wasSentHere, false)
+  assert.equal((await env.store.send(sendOptions(env, { id: a.id, turnId: 't' }))).ok, true)
+  const own = env.store.describeImage(env.ev.chatKey, a.data)
+  assert.equal(own.wasSentHere, true)
+  assert.equal(typeof own.sentAt, 'number')
+  assert.match(own.desc, /捧饭碗/)
+  const shared = env.store.describeHash('qqbot:1:group:200', a.id)
+  assert.equal(shared.wasSentHere, false)
+  assert.equal(shared.sentAt, undefined)
+  const local = await setup({ stickers: { noShareGroups: ['100'] } })
+  const privateImage = await addSticker(local, 2)
+  assert.equal(local.store.describeImage('qqbot:1:group:200', privateImage.data), null)
+  await env.store.trash(a.id)
+  assert.equal(env.store.describeImage(env.ev.chatKey, a.data), null)
 })

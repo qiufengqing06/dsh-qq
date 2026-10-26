@@ -33,8 +33,6 @@ async function waitForFollowup(agents, count = 1, timeoutMs = 3000) {
 
 /** 取出 QQ 消息体里的文本（markdown 模式放在 body.markdown.content）。 */
 const textOf = body => (typeof body?.content === 'string' ? body.content : body?.markdown?.content ?? '')
-/** 被动回复引用：markdown 模式用 msg_id，纯文本用 message_reference。 */
-const replyRefOf = body => body?.msg_id ?? body?.message_reference?.message_id ?? null
 
 /**
  * P1 验收：真协议端到端（假 QQ 服务）——
@@ -88,7 +86,7 @@ const cleanup = async ({ server, ctx, restore }) => {
 }
 
 test('端到端：QQ 私聊 ping → DSH 会话 → 回复经 REST 回到 QQ', async t => {
-  const env = await setup()
+  const env = await setup({ configOverrides: { markdown: 'off' } })
   t.after(() => cleanup(env))
   assert.equal(env.plugin.transport.status().phase, 'connected', '应已连上假 QQ 网关')
 
@@ -112,11 +110,13 @@ test('端到端：QQ 私聊 ping → DSH 会话 → 回复经 REST 回到 QQ', a
   assert.ok(sent !== null, '应通过 REST 把回复发回 QQ')
   assert.equal(textOf(sent.body), 'pong')
   assert.ok([0, 2].includes(sent.body.msg_type), 'msg_type 应为纯文本 0 或 markdown 2')
+  assert.equal(sent.body.msg_id, 'qq-msg-1', '普通回复继续关联被动消息')
+  assert.equal(sent.body.message_reference, undefined, '普通回复不生成可见引用')
   assert.equal(sent.headers.authorization.startsWith('QQBot token-'), true)
 })
 
 test('端到端：QQ 里 /qq-help 由 router 直接回复，不创建会话', async t => {
-  const env = await setup()
+  const env = await setup({ configOverrides: { markdown: 'off' } })
   t.after(() => cleanup(env))
   await env.plugin.store.setHomeChannel('openid-owner')
 
@@ -131,8 +131,8 @@ test('端到端：QQ 里 /qq-help 由 router 直接回复，不创建会话', as
   const sent = env.server.lastRest('/v2/users/openid-owner/messages')
   assert.ok(sent !== null)
   assert.match(textOf(sent.body), /dsh-qq 命令/)
-  // 被动回复带 message_reference（引用触发消息）
-  assert.equal(replyRefOf(sent.body), 'qq-msg-2', '被动回复应引用触发消息')
+  assert.equal(sent.body.msg_id, 'qq-msg-2', '被动回复继续关联触发消息')
+  assert.deepEqual(sent.body.message_reference, { message_id: 'qq-msg-2' }, '命令回执显式指定 replyTo 时保留引用')
 })
 
 test('端到端：群 @ 消息按 group 路径回复；未 @ 忽略', async t => {

@@ -827,7 +827,7 @@ test('引用失效兜底：QQ 报 msg_id 过期 → 去掉引用以主动消息�
   assert.equal(posts[1].body.markdown.content, '长任务结果', '重发内容一致')
 })
 
-test('纯文本模式（markdown off）也带 msg_id：否则等于放弃被动回复、走主动消息配额', async t => {
+test('默认私聊/群回复保留 msg_id 被动关联，不自动生成可见引用', async t => {
   const env = await setup()
   t.after(() => cleanup(env))
   await env.transport.start()
@@ -838,13 +838,57 @@ test('纯文本模式（markdown off）也带 msg_id：否则等于放弃被动�
     timestamp: '1700000000',
     author: { user_openid: 'u1', username: 'U' },
   })
+  env.server.pushDispatch('GROUP_AT_MESSAGE_CREATE', {
+    id: 'g-7', content: 'ping', group_openid: 'g1', author: { member_openid: 'u1' },
+  })
   await tick(30)
 
-  await env.transport.sendText({ kind: 'dm', userId: 'u1' }, '纯文本回复', { markdown: false })
-  const body = lastMessageBody(env.server)
-  assert.equal(body.msg_type, 0)
-  assert.equal(body.msg_id, 'm-7', 'C2C/群聊的被动回复字段是 msg_id')
-  assert.equal(body.content, '纯文本回复')
+  for (const [target, messageId] of [[{ kind: 'dm', userId: 'u1' }, 'm-7'], [{ kind: 'group', groupId: 'g1' }, 'g-7']]) {
+    for (const markdown of [false, true]) {
+      await env.transport.sendText(target, '普通回复', { markdown })
+      const body = lastMessageBody(env.server)
+      assert.equal(body.msg_type, markdown ? 2 : 0)
+      assert.equal(body.msg_id, messageId, 'C2C/群聊被动回复继续使用 msg_id')
+      assert.equal(body.message_reference, undefined, '自动关联入站消息不等于可见引用')
+      assert.equal(markdown ? body.markdown.content : body.content, '普通回复')
+    }
+  }
+})
+
+test('显式 replyTo 保留纯文本引用能力，分段时只引用第一段', async t => {
+  const env = await setup()
+  t.after(() => cleanup(env))
+  await env.transport.start()
+  await tick(40)
+  for (const target of [{ kind: 'dm', userId: 'u1' }, { kind: 'group', groupId: 'g1' }]) {
+    const before = env.server.state.rest.length
+    const result = await env.transport.sendText(target, 'a'.repeat(4500), { markdown: false, replyTo: 'chosen-message' })
+    assert.equal(result.ok, true)
+    const posts = env.server.state.rest.slice(before).filter(entry => entry.path.endsWith('/messages'))
+    assert.equal(posts.length, 2)
+    assert.equal(posts[0].body.msg_id, 'chosen-message')
+    assert.deepEqual(posts[0].body.message_reference, { message_id: 'chosen-message' })
+    assert.equal(posts[1].body.msg_id, undefined)
+    assert.equal(posts[1].body.message_reference, undefined)
+  }
+})
+
+test('显式纯文本引用过期时重试清除关联和可见引用，正文保留', async t => {
+  const env = await setup()
+  t.after(() => cleanup(env))
+  await env.transport.start()
+  await tick(40)
+  env.server.setResponder(({ path, body }) => path.endsWith('/messages') && body?.msg_id
+    ? { status: 400, body: { code: 40034005, message: '回复消息msg_id已过期' } }
+    : null)
+  const result = await env.transport.sendText({ kind: 'dm', userId: 'u1' }, '引用回复', { markdown: false, replyTo: 'expired' })
+  assert.equal(result.ok, true)
+  const posts = env.server.state.rest.filter(entry => entry.path.endsWith('/messages'))
+  assert.equal(posts.length, 2)
+  assert.deepEqual(posts[0].body.message_reference, { message_id: 'expired' })
+  assert.equal(posts[1].body.msg_id, undefined)
+  assert.equal(posts[1].body.message_reference, undefined)
+  assert.equal(posts[1].body.content, '引用回复')
 })
 
 test('去重窗口/容量由配置驱动（dedupWindowMs / dedupMaxSize）', async t => {

@@ -1542,7 +1542,7 @@ test('真实会话事件：使用已消费的发言人，尚未消费的排队�
   agent.session.append('turn/start', { turn: 1 })
   agent.session.append('user/message', agent.followed[0])
   await env.bridge.handleUserMessage(env.transport.injectText('第二句', { messageId: 'm2', sender: { id: 'u2' } }))
-  const result = await env.bridge.dispatchReply([{ type: 'text', text: '接第一句' }], { agent })
+  const result = await env.bridge.dispatchReply([{ type: 'text', text: '接第一句', replyToMessageId: 'm1' }], { agent })
   assert.equal(result.ok, true)
   assert.equal(receipts[0].senderId, 'u1')
   assert.equal(env.transport.dump().find(x => x.kind === 'text').opts.replyTo, 'm1')
@@ -1566,7 +1566,7 @@ test('真实连续回合：没有中间 idle 也保留每一轮文字，最终 i
   await tick()
   const output = env.transport.dump().filter(x => x.kind === 'text')
   assert.deepEqual(output.map(x => x.text), ['第一答', '第二答'])
-  assert.deepEqual(output.map(x => x.opts.replyTo), ['q1', 'q2'])
+  assert.deepEqual(output.map(x => x.opts.replyTo), [undefined, undefined], '普通最终回复不自动添加可见引用')
   env.scope.dispose()
 })
 
@@ -1598,4 +1598,32 @@ test('聊天文字硬上限：长句截断后仍能发送且不超过 260 字', 
   assert.equal(texts.length, 1)
   assert.equal(texts[0].text.length, 260)
   env.scope.dispose()
+})
+
+test('聊天默认不引用：私聊/群聊的普通回复与工具气泡都直接发，仍记录续聊对象', async () => {
+  for (const target of [{ kind: 'dm', userId: 'u1' }, { kind: 'group', groupId: 'g1' }]) {
+    for (const useTool of [false, true]) {
+      const receipts = []
+      const env = await setup({}, {}, {}, { sleep: async () => {}, onReply: x => receipts.push(x) })
+      try {
+        const ev = env.transport.injectText('不引用试试', { target, messageId: 'incoming', sender: { id: 'u1' }, mentioned: true })
+        await env.store.setMode(ev.chatKey, 'chat')
+        await env.bridge.handleUserMessage(ev)
+        const agent = env.agents.live.get(env.agents.created[0].sessionId)
+        if (useTool) {
+          const result = await env.bridge.dispatchReply([{ type: 'text', text: '行' }, { type: 'text', text: '这样就清爽了' }], { agent })
+          assert.equal(result.ok, true)
+        } else {
+          agent.reply('行\n\n这样就清爽了').ctx.emitStatus('idle')
+          await tick()
+        }
+        const output = env.transport.dump().filter(x => x.kind === 'text')
+        assert.deepEqual(output.map(x => x.text), ['行', '这样就清爽了'])
+        assert.ok(output.every(x => !Object.hasOwn(x.opts, 'replyTo')))
+        assert.deepEqual(receipts.map(x => x.senderId), ['u1', 'u1'])
+        assert.deepEqual(receipts.map(x => x.explicit), [true, false])
+        assert.ok(receipts.every(x => x.replyTo === null))
+      } finally { await env.scope.dispose() }
+    }
+  }
 })

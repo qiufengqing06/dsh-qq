@@ -288,12 +288,24 @@ test('人设库：state 元数据、正文 GET、增删默认绑定接口', asyn
 
   const one = await call(env.webUi, { url: `${PAGE_PATH}/api/personas?id=tech` })
   assert.equal(one.code, 200)
+  assert.equal(one.json().persona.id, 'tech')
   assert.equal(one.json().persona.text, '你只聊技术。')
   assert.equal((await call(env.webUi, { url: `${PAGE_PATH}/api/personas?id=nope` })).code, 404)
 
-  const saved = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'save', id: 'qa', name: '问答', text: '回答要短。' } })
+  const saved = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'save', id: '002', name: '问答', text: '回答要短。' } })
   assert.equal(saved.code, 200, saved.body)
-  assert.equal(env.store.personaOf('qa').name, '问答')
+  assert.equal(saved.json().persona.id, '002')
+  assert.equal(env.store.personaOf('002').name, '问答')
+
+  // 编辑器仅依赖详情返回的 id，复刻打开已有项→保存→删除的实际契约。
+  const detail = await call(env.webUi, { url: `${PAGE_PATH}/api/personas?id=002` })
+  const draft = detail.json().persona
+  assert.equal(draft.id, '002')
+  const edited = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'save', id: draft.id, name: '更新问答', text: '更新后的临时内容。' } })
+  assert.equal(edited.code, 200, edited.body)
+  const updatedPersona = edited.json().persona
+  assert.equal(updatedPersona.id, '002')
+  assert.equal(env.store.personaOf('002').text, '更新后的临时内容。')
 
   const badBind = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'bind', chatKey: 'not-a-chat-key', personaId: 'tech' } })
   assert.equal(badBind.code, 400, '非法 chatKey 应返回 400')
@@ -308,13 +320,13 @@ test('人设库：state 元数据、正文 GET、增删默认绑定接口', asyn
   assert.equal(env.store.personaBinding(chatKey, 'work'), '')
 
 
-  const def = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'setDefault', id: 'qa' } })
+  const def = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'setDefault', id: '002' } })
   assert.equal(def.json().ok, true)
-  assert.equal(env.store.defaultPersonaId(), 'qa')
+  assert.equal(env.store.defaultPersonaId(), '002')
 
-  const del = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'delete', id: 'qa' } })
+  const del = await call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/personas`, headers: PANEL, body: { action: 'delete', id: updatedPersona.id } })
   assert.equal(del.json().ok, true)
-  assert.equal(env.store.personaOf('qa'), null)
+  assert.equal(env.store.personaOf('002'), null)
 })
 
 test('对话模式：state 透传 + POST /api/mode 切换与校验', async () => {

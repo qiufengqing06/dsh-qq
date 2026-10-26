@@ -364,6 +364,26 @@ test('会话提示词：默认/按对话覆盖/清除/长度上限/重启不丢'
 
 // ── 命名人设库 + 对话绑定 ──
 
+test('人设详情与保存返回完整 id，旧落盘格式重载后保留数字编号的前导零', async () => {
+  const dir = await tempDir()
+  const store = createStore({ dir })
+  await store.load()
+  const saved = await store.setPersona(' 002 ', { name: '测试人设', text: '临时测试内容。' })
+  assert.equal(saved.id, '002')
+  assert.deepEqual(store.personaOf('002'), saved)
+  saved.id = 'other'
+  saved.text = '修改返回对象不能修改已保存内容'
+  assert.equal(store.personaOf('002').id, '002')
+  assert.equal(store.personaOf('002').text, '临时测试内容。')
+  const raw = JSON.parse(await readFile(store.file, 'utf8'))
+  assert.equal(Object.hasOwn(raw.personas['002'], 'id'), false, '不向原有落盘记录重复写入 id')
+  const reloaded = createStore({ dir })
+  await reloaded.load()
+  assert.equal(reloaded.personaOf('002').id, '002')
+  assert.equal(reloaded.personaOf('002').name, '测试人设')
+  assert.equal(reloaded.personaOf('missing'), null)
+})
+
 test('人设库：保存/默认/绑定/解绑，生效来源可追踪', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-persona-'))
   const store = createStore({ dir })

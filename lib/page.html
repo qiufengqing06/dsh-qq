@@ -1283,7 +1283,8 @@
     api('/dsh-qq/api/personas?id=' + encodeURIComponent(id)).then(function (res) {
       if (!res.data || res.data.ok !== true) { notice((res.data && res.data.error) || '读取人设失败', 'bad'); return; }
       personaEditing = id;
-      personaDraft = res.data.persona;
+      // 旧后端详情没有 id；编辑对象以用户点开的列表项为准。
+      personaDraft = Object.assign({}, res.data.persona, { id: id });
       renderPrompts();
     }).catch(function (error) { notice(String(error.message || error), 'bad'); });
   }
@@ -1291,18 +1292,25 @@
   function personaEditor() {
     var draft = personaDraft || { id: '', name: '', text: '' };
     var editingExisting = personaEditing !== '@new';
+    var editingId = editingExisting ? personaEditing : '';
     var box = el('div', { className: 'group-editor' });
     var idInput = el('input', {
       type: 'text',
       id: 'persona-id',
       'aria-label': '人设 id',
       placeholder: 'id：小写字母/数字/下划线/短横线，例如 tech',
-      value: draft.id || ''
+      value: editingExisting ? editingId : (draft.id || '')
     });
     if (editingExisting) idInput.disabled = true;
     var nameInput = el('input', { type: 'text', id: 'persona-name', 'aria-label': '人设名称', placeholder: '名称，例如 技术顾问', value: draft.name || '' });
     var textarea = el('textarea', { id: 'persona-text', 'aria-label': '人设内容', placeholder: '人设文本（最多 4000 字）' });
     textarea.value = draft.text || '';
+    var rememberDraft = function () {
+      personaDraft = { id: editingExisting ? editingId : idInput.value, name: nameInput.value, text: textarea.value };
+    };
+    idInput.addEventListener('input', rememberDraft);
+    nameInput.addEventListener('input', rememberDraft);
+    textarea.addEventListener('input', rememberDraft);
     var count = el('span', { className: 'hint' });
     var refresh = function () { count.textContent = textarea.value.length + ' / ' + (S.promptLimit || 4000) + ' 字'; };
     textarea.addEventListener('input', refresh);
@@ -1315,7 +1323,7 @@
       btn('保存', 'primary sm', function () {
         personaAction({
           action: 'save',
-          id: idInput.value.trim(),
+          id: editingExisting ? editingId : idInput.value.trim(),
           name: nameInput.value.trim(),
           text: textarea.value
         }, '人设已保存').then(function (ok) {
@@ -1326,8 +1334,8 @@
     ]);
     if (editingExisting) {
       actions.appendChild(btn('删除', 'quiet sm', function () {
-        if (!window.confirm('删除人设「' + (draft.name || draft.id) + '」？绑定到它的对话会回落到默认人设。')) return;
-        personaAction({ action: 'delete', id: draft.id }, '人设已删除').then(function (ok) {
+        if (!window.confirm('删除人设「' + (draft.name || editingId) + '」？绑定到它的对话会回落到默认人设。')) return;
+        personaAction({ action: 'delete', id: editingId }, '人设已删除').then(function (ok) {
           if (ok) { personaEditing = ''; personaDraft = null; renderPrompts(); }
         });
       }));
@@ -2145,7 +2153,8 @@
     renderCredentials();
     renderIdentity();
     renderGroups();
-    renderPrompts();
+    // 状态轮询（含已在途请求）不能替换打开的编辑器、草稿和光标。
+    if (personaEditing === '') renderPrompts();
     renderStickers();
     renderChatControl();
     renderRelations();

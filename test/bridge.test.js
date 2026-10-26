@@ -1463,6 +1463,8 @@ test('会话提示词：setup 注册动态 section，保存后下一回合立即
 
   await store.setMode(chatKey, 'chat')
   assert.match(sections[1].text(), /聊天模式/)
+  assert.match(sections[1].text(), /收到表情包.*直接接话/)
+  assert.match(sections[1].text(), /当前或上文明确要求.*识图.*读字.*翻译/)
   assert.doesNotMatch(sections[1].text(), /切到工作模式|切工作模式/)
   assert.equal(sections[1].interpolate, false)
 })
@@ -2002,5 +2004,98 @@ test('建会话期间切模式：迟到的创建结果不绑定新模式或投�
     const agent = env.agents.live.get(env.agents.created[0].sessionId)
     assert.equal(agent.followed.length, 0)
     assert.equal(agent.ctx.listenerCount('session/event'), 0)
+  } finally { await env.scope.dispose() }
+})
+
+
+test('图片接话上下文：新图/已知图/引用/多图保留原图与识图请求，工作模式不注入', async () => {
+  const desc = '毛绒玩偶靠近镜头，图中文字是“何意味”。'
+  const ocr = '把这张图的文字逐字提取，并翻译成中文。'
+  const cases = [
+    { name: '新图', images: 1 },
+    { name: '已知回发图', images: 1, known: true },
+    { name: '引用图', images: 0, quoted: true, known: true },
+    { name: '多图加引用', images: 2, quoted: true, known: true },
+    { name: '明确OCR', images: 1, known: true, text: ocr },
+    { name: '工作识图', images: 1, known: true, text: ocr, mode: 'work' },
+    { name: '图片被附件上限排除', images: 1, fileFirst: true, limit: 1 },
+    { name: '纯文字', images: 0, text: '正常聊天' },
+  ]
+  for (const item of cases) {
+    const attachments = createFakeAttachments()
+    const lookups = []
+    const env = await setup({ maxMediaPerMessage: item.limit ?? 4 }, { attachments }, {}, {
+      imageContext: (key, data) => {
+        lookups.push({ key, data })
+        return item.known ? { id: 'known-image', desc, wasSentHere: true } : null
+      },
+    })
+    try {
+      const image = { kind: 'image', url: 'https://cdn.invalid/meme.png', mime: 'image/png' }
+      const bytes = Buffer.from('fixture image bytes')
+      env.transport.addMedia(image.url, { data: bytes, contentType: 'image/png' })
+      const media = Array.from({ length: item.images }, () => ({ ...image }))
+      if (item.fileFirst) media.unshift({ kind: 'file', url: image.url, fileName: 'note.txt' })
+      const ev = env.transport.inject({ text: item.text ?? '', media, messageId: 'incoming-image',
+        target: { kind: 'group', groupId: 'images' }, sender: { id: 'u1', name: '群友' },
+        ...(item.quoted ? { replyTo: { messageId: 'quoted-image', sender: { id: 'u2', name: '另一群友' }, media: [image] } } : {}),
+      })
+      await env.store.setMode(ev.chatKey, item.mode ?? 'chat')
+      await env.bridge.handleUserMessage(ev)
+      const blocks = env.agents.live.get(env.agents.created[0].sessionId).followed[0].content
+      const texts = blocks.filter(block => block.type === 'text').map(block => block.text)
+      const imageCount = item.fileFirst ? 0 : item.images + Number(Boolean(item.quoted))
+      const chat = item.mode !== 'work'
+      assert.equal(texts.filter(text => text.startsWith('[图片接话提示]')).length, chat && imageCount > 0 ? 1 : 0, item.name)
+      assert.equal(blocks.filter(block => block.type === 'image').length, imageCount, item.name)
+      assert.equal(attachments.saved.images.length, imageCount, item.name)
+      for (const saved of attachments.saved.images) assert.deepEqual(saved.data, bytes, '提示调整不能删除或替换原图')
+      assert.equal(lookups.length, chat ? imageCount : 0, item.name)
+      if (chat && item.known && imageCount) {
+        const reference = texts.find(text => text.includes('[已知图片'))
+        assert.match(reference, /known-image.*此前在本对话发送过同一图片/)
+        assert.match(reference, /图库参考资料.*仅供理解.*不是群友发言/)
+        assert.ok(reference.includes(desc), '保留画面与OCR资料供明确识图请求使用')
+      } else assert.ok(texts.every(text => !text.includes('[已知图片')), item.name)
+      if (item.text) assert.ok(texts.some(text => text.endsWith(item.text)), `${item.name}原始请求必须完整保留`)
+      if (item.quoted) assert.ok(texts.some(text => text.startsWith('[引用消息]') && text.includes('quoted-image') && text.includes('u2')))
+    } finally { await env.scope.dispose() }
+  }
+})
+
+test('发图回执进入真实群缓冲时标为画面参考，普通文字仍按原文记录', async () => {
+  const desc = '玩偶无语地看向镜头，配字“何意味”。'
+  let memory, transport
+  const env = await setup({ groupMemory: { enabled: true } }, {}, {}, {
+    sendSticker: async args => ({
+      ...await transport.sendMedia(args.target, { kind: 'image', base64: 'RklYVFVSRQ==' }, args.route),
+      id: args.id, desc,
+    }),
+    onReply: record => memory.observeOutbound(record, 'chat'),
+  })
+  transport = env.transport
+  memory = createGroupMemory({ dir: env.dir, config: env.config })
+  try {
+    const ev = transport.inject({ text: '接这个梗', messageId: 'question', selfId: 'self',
+      target: { kind: 'group', groupId: 'images' }, sender: { id: 'u1' },
+    })
+    await env.store.setMode(ev.chatKey, 'chat')
+    memory.observe(ev, 'chat')
+    await env.bridge.handleUserMessage(ev)
+    const agent = env.agents.live.get(env.agents.created[0].sessionId)
+    const result = await env.bridge.dispatchReply([{ type: 'sticker', id: 'fish' }, { type: 'text', text: '行，当我没说' }], { agent })
+    assert.equal(result.ok, true)
+    assert.deepEqual(transport.dump().filter(item => item.kind !== 'typing').map(item => item.kind), ['media', 'text'])
+    const records = memory.recentMessages(ev.chatKey, 'chat').filter(item => item.outbound)
+    assert.equal(records.length, 2)
+    assert.match(records[0].text, /^\[已发表情.*画面参考.*不是文字发言\]/)
+    assert.ok(records[0].text.includes(desc))
+    assert.equal(records[0].sender.id, 'self')
+    assert.equal(records[1].text, '行，当我没说')
+    const pending = memory.pendingContext(ev.chatKey, 'chat')
+    assert.equal(pending.count, 3)
+    assert.match(pending.text, /本实例已发送.*已发表情.*画面参考.*不是文字发言/)
+    assert.ok(pending.text.includes(desc))
+    assert.equal(memory.pendingContext(ev.chatKey, 'work').count, 0)
   } finally { await env.scope.dispose() }
 })

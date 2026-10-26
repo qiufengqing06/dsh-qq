@@ -28,6 +28,7 @@ test('list_stickers 的实际模型渲染含完整描述、用途与可用原因
   assert.equal(listed.key, chatKey)
   assert.equal(listed.options.turnId, 'turn-42')
   assert.ok(rendered.includes(desc), 'render 不能只输出标签而丢掉视觉描述')
+  assert.match(rendered.split('\n')[0], /描述仅供选图.*不要作为聊天台词复述/)
   assert.match(rendered, /可发送/)
   assert.match(rendered, /用途标签：调侃/)
   assert.match(rendered, /available-id · 收藏 · 人设精选 · 可发送/)

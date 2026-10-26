@@ -16,7 +16,7 @@ import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ct
 
 const tick = (ms = 15) => new Promise(resolve => setTimeout(resolve, ms))
 
-function chatClock() {
+function chatClock(onSleep = () => {}) {
   let now = 10_000
   const waits = new Set()
   const sleeps = []
@@ -25,6 +25,7 @@ function chatClock() {
     sleeps,
     sleep(ms) {
       sleeps.push(ms)
+      onSleep(ms)
       return new Promise(resolve => { waits.add({ at: now + ms, resolve }) })
     },
     async advance(ms) {
@@ -33,6 +34,23 @@ function chatClock() {
         if (wait.at <= now) { waits.delete(wait); wait.resolve() }
       }
       await tick()
+    },
+  }
+}
+
+// The fake timer releases the input window, but session creation still writes
+// to disk. Observe actual followup instead of guessing how long that I/O takes.
+function firstDelivery() {
+  const delivered = Promise.withResolvers()
+  return {
+    promise: delivered.promise,
+    onAgentReady(agent) {
+      const followup = agent.followup.bind(agent)
+      agent.followup = message => {
+        const result = followup(message)
+        delivered.resolve(agent)
+        return result
+      }
     },
   }
 }
@@ -1663,15 +1681,18 @@ test('聊天默认不引用：私聊/群聊的普通回复与工具气泡都直�
 })
 
 
-test('聊天收拢：立即确认入队，固定窗口保留不同身份、消息 ID、引用和媒体', async () => {
-  const time = chatClock()
+test('聊天收拢：立即确认入队，固定窗口保留不同身份、消息 ID、引用和媒体', { timeout: 10000 }, async () => {
+  const delivered = firstDelivery()
+  const waiting = Promise.withResolvers(), replied = Promise.withResolvers()
+  const time = chatClock(ms => { if (ms === 400) waiting.resolve() })
   const contexts = []
   const receipts = []
   const attachments = createFakeAttachments()
   const env = await setup({ maxMediaPerMessage: 1 }, { attachments }, { capabilities: { typing: false } }, {
     ...time, chatInputWindowMs: CHAT_INPUT_WINDOW_MS, random: () => 0,
+    onAgentReady: delivered.onAgentReady,
     ambientContext: async (ev, options) => { contexts.push(options); return { recent: '之前的话' } },
-    onReply: event => receipts.push(event),
+    onReply: event => { receipts.push(event); replied.resolve() },
   })
   try {
     const target = { kind: 'group', groupId: 'g1' }
@@ -1689,7 +1710,8 @@ test('聊天收拢：立即确认入队，固定窗口保留不同身份、消�
     await time.advance(399)
     assert.equal(env.agents.created.length, 0)
     await time.advance(1)
-    const agent = env.agents.live.get(env.agents.created[0].sessionId)
+    const agent = await delivered.promise
+    assert.equal(time.clock(), 10600, '等待建会话和媒体完成时不再推进假时钟')
     assert.equal(agent.followed.length, 1, '固定在首条后 600ms 投递，不被补充无限续期')
     assert.equal(agent.steered.length, 0)
     const blocks = agent.followed[0].content
@@ -1703,12 +1725,14 @@ test('聊天收拢：立即确认入队，固定窗口保留不同身份、消�
     assert.equal(blocks.filter(x => x.type === 'image').length, 1)
     assert.deepEqual(contexts, [{ excludeMessageIds: ['q1', 'q2'] }])
     agent.reply('成交，鱼先交出来').ctx.emitStatus('idle')
-    await tick()
+    await waiting.promise
+    assert.deepEqual(time.sleeps, [600, 400])
     assert.equal(env.transport.lastText(), null)
     assert.equal(env.bridge.isBusy(first.chatKey), true, '已生成但等待首发也算忙')
     await time.advance(399)
     assert.equal(env.transport.lastText(), null)
     await time.advance(1)
+    await replied.promise
     assert.equal(env.transport.lastText(), '成交，鱼先交出来')
     assert.equal(receipts[0].senderId, 'u2', '保留实际最后发言人')
     assert.equal(receipts[0].explicit, true, '首条明确 @ 的事实不因末条没有 @ 而丢失')
@@ -1766,9 +1790,16 @@ test('聊天等待取消：停止/切模式/切人设/卸载均取消尚未投�
   }
 })
 
-test('聊天缓冲有界：队列计入配额、异步建会话失败有反馈，工作模式不等窗口', async () => {
+test('聊天缓冲有界：队列计入配额、异步建会话失败有反馈，工作模式不等窗口', { timeout: 10000 }, async () => {
   const time = chatClock()
   const env = await setup({ maxQueuedMessagesPerChat: 2 }, {}, {}, { ...time, chatInputWindowMs: CHAT_INPUT_WINDOW_MS })
+  const failedReply = Promise.withResolvers()
+  const sendText = env.transport.sendText.bind(env.transport)
+  env.transport.sendText = (...args) => {
+    const result = sendText(...args)
+    failedReply.resolve()
+    return result
+  }
   try {
     const ev = env.transport.injectText('第一条')
     await env.store.setMode(ev.chatKey, 'chat')
@@ -1778,6 +1809,9 @@ test('聊天缓冲有界：队列计入配额、异步建会话失败有反馈�
     assert.equal(env.bridge.status().pending, 2)
     env.agents.failed.create = 'fake unavailable'
     await time.advance(600)
+    await failedReply.promise
+    // The send is recorded; only flushChatBatch's final microtasks remain.
+    await new Promise(resolve => setImmediate(resolve))
     assert.match(env.transport.lastText(), /DSH 会话创建失败/)
     assert.equal(env.bridge.isBusy(ev.chatKey), false)
     assert.equal(env.bridge.status().pending, 0)
@@ -1893,9 +1927,14 @@ test('明确 @ 的连续补充准入：固定三秒、同人同群、身份和�
 })
 
 
-test('stop --keep 保留尚未投递的聊天批次并迁至新代际，只投递一次', async () => {
-  const time = chatClock()
-  const env = await setup({}, {}, { capabilities: { typing: false } }, { ...time, random: () => 0, chatInputWindowMs: CHAT_INPUT_WINDOW_MS })
+test('stop --keep 保留尚未投递的聊天批次并迁至新代际，只投递一次', { timeout: 10000 }, async () => {
+  const delivered = firstDelivery()
+  const waiting = Promise.withResolvers(), replied = Promise.withResolvers()
+  const time = chatClock(ms => { if (ms === 200) waiting.resolve() })
+  const env = await setup({}, {}, { capabilities: { typing: false } }, {
+    ...time, random: () => 0, chatInputWindowMs: CHAT_INPUT_WINDOW_MS,
+    onAgentReady: delivered.onAgentReady, onReply: () => replied.resolve(),
+  })
   try {
     const first = env.transport.injectText('还没说完', { messageId: 'q1' })
     await env.store.setMode(first.chatKey, 'chat')
@@ -1906,15 +1945,20 @@ test('stop --keep 保留尚未投递的聊天批次并迁至新代际，只投�
     assert.equal(env.bridge.status().pending, 2)
     await time.advance(400)
     assert.equal(env.agents.created.length, 0, '旧窗口已取消')
-    await time.advance(200)
-    const agent = env.agents.live.get(env.agents.created[0].sessionId)
+    await time.advance(199)
+    assert.equal(env.agents.created.length, 0, '重开窗口在第 800ms 前仍未到期')
+    await time.advance(1)
+    const agent = await delivered.promise
+    assert.equal(time.clock(), 10800)
     assert.equal(agent.followed.length, 1)
     const text = agent.followed[0].content.map(x => x.text ?? '').join('\n')
     assert.match(text, /还没说完/)
     assert.match(text, /给你条鱼/)
     agent.reply('鱼先交出来').ctx.emitStatus('idle')
-    await tick()
+    await waiting.promise
+    assert.deepEqual(time.sleeps, [600, 600, 200])
     await time.advance(200)
+    await replied.promise
     assert.equal(env.transport.lastText(), '鱼先交出来', '保留输入的新回复不因旧代际而失效')
     await time.advance(1000)
     assert.equal(agent.followed.length, 1)
@@ -2279,20 +2323,34 @@ test('人设与遗忘边界：切身份新建宿主，受污染历史即使pendi
   env.scope.dispose()
 })
 
-test('恢复平静仅失效旧回复：尚未消费的输入窗口仍会投递', async () => {
-  const time = chatClock()
-  const env = await setup({}, {}, {}, { ...time, chatInputWindowMs: 600 })
-  const ev = env.transport.injectText('这个问题还要回答')
-  await env.store.setMode(ev.chatKey, 'chat')
-  await env.bridge.handleUserMessage(ev)
-  env.bridge.invalidateReplies(ev.chatKey)
-  await time.advance(600)
-  const agent = env.agents.live.get(env.agents.created[0].sessionId)
-  assert.equal(agent.followed.length, 1)
-  agent.reply('当然继续回答').endTurn()
-  await time.advance(3000)
-  assert.equal(env.transport.lastText(), '当然继续回答')
-  env.scope.dispose()
+test('恢复平静仅失效旧回复：尚未消费的输入窗口仍会投递', { timeout: 10000 }, async () => {
+  const delivered = firstDelivery()
+  const waiting = Promise.withResolvers(), replied = Promise.withResolvers()
+  const time = chatClock(ms => { if (ms === 400) waiting.resolve() })
+  const env = await setup({}, {}, {}, {
+    ...time, chatInputWindowMs: 600, random: () => 0,
+    onAgentReady: delivered.onAgentReady, onReply: () => replied.resolve(),
+  })
+  try {
+    const ev = env.transport.injectText('这个问题还要回答')
+    await env.store.setMode(ev.chatKey, 'chat')
+    await env.bridge.handleUserMessage(ev)
+    env.bridge.invalidateReplies(ev.chatKey)
+    await time.advance(599)
+    assert.equal(env.agents.created.length, 0)
+    await time.advance(1)
+    const agent = await delivered.promise
+    assert.equal(time.clock(), 10600)
+    assert.equal(agent.followed.length, 1)
+    agent.reply('当然继续回答').endTurn()
+    await waiting.promise
+    assert.deepEqual(time.sleeps, [600, 400])
+    await time.advance(399)
+    assert.equal(env.transport.lastText(), null)
+    await time.advance(1)
+    await replied.promise
+    assert.equal(env.transport.lastText(), '当然继续回答')
+  } finally { await env.scope.dispose() }
 })
 
 test('stop --keep 将宿主未消费inbox迁至新代际，恢复后仍可正常回复', async () => {

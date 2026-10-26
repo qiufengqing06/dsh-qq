@@ -46,6 +46,7 @@ test('发布审计：完整两端代码可通过，设置旧跳过变量也不�
   const passed = env.run()
   assert.equal(passed.code, 0, passed.text)
   assert.match(passed.text, /完整测试通过/)
+  assert.match(passed.text, /# tests 1;# pass 1;# fail 0;# skipped 0/)
   env.write('test/plugin.test.js', "import { test } from 'node:test'; test('broken', () => { throw Error('failure') })\n")
   env.commit()
   const failed = env.run('HEAD', { SKIP_TESTS: '1', SKIP_AUDIT: '1' })
@@ -116,7 +117,7 @@ test('发布审计：真实hook环境下临时仓库不修改外层refs、index�
     GIT_OBJECT_DIRECTORY: join(gitDir, 'objects'), GIT_ALTERNATE_OBJECT_DIRECTORIES: join(gitDir, 'objects'),
     GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.bare', GIT_CONFIG_VALUE_0: 'true',
   }
-  const result = spawnSync(process.execPath, ['--test', '--test-name-pattern', '^发布审计：完整两端代码可通过', fileURLToPath(import.meta.url)], {
+  const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern', '^发布审计：完整两端代码可通过', fileURLToPath(import.meta.url)], {
     cwd: outer.cwd, encoding: 'utf8', env, timeout: 30_000,
   })
   assert.equal(result.status, 0, result.stdout + result.stderr)

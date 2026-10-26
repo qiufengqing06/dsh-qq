@@ -61,7 +61,7 @@ fi
 pass '文件类型与顶层路径检查通过'
 
 test_log=$(mktemp "${TMPDIR:-/tmp}/dsh-qq-publish-test.XXXXXX.log")
-if node --test "${tests[@]}" >"$test_log" 2>&1; then
+if node --test --test-reporter=tap "${tests[@]}" >"$test_log" 2>&1; then
   pass "完整测试通过：$(grep -E '^# (tests|pass|fail|skipped) ' "$test_log" | paste -sd ';' -)"
   rm -f "$test_log"
 else

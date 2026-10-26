@@ -1,6 +1,6 @@
 {
   "name": "dsh-qq",
-  "version": "0.7.58",
+  "version": "0.7.59",
   "description": "QQ 渠道插件：QQ 号扫码/QQBot 凭据登录，QQ ↔ DSH 会话双向消息、远程控制与审批（de_channel_send channels=qq）",
   "type": "module",
   "main": "lib/index.js",

@@ -1916,16 +1916,28 @@ test('stop --keep 保留尚未投递的聊天批次并迁至新代际，只投�
   } finally { await env.scope.dispose() }
 })
 
-test('停止发生在媒体准备期间：keep 重投完整原始消息，默认停止不投递', async () => {
+test('停止发生在媒体准备期间：keep 重投完整原始消息，默认停止不投递', { timeout: 10_000 }, async () => {
   for (const keepQueue of [false, true]) {
     const time = chatClock()
     const attachments = createFakeAttachments()
     const env = await setup({}, { attachments }, {}, { ...time, random: () => 0, chatInputWindowMs: CHAT_INPUT_WINDOW_MS })
-    let release
+    const downloadStarted = Promise.withResolvers()
+    const downloadRelease = Promise.withResolvers()
+    const imageSaved = Promise.withResolvers()
+    const delivered = Promise.withResolvers()
+    const saveImage = attachments.saveImage
+    attachments.saveImage = async input => {
+      const result = await saveImage(input)
+      imageSaved.resolve()
+      return result
+    }
     let downloads = 0
     env.transport.downloadMedia = async () => {
       downloads++
-      if (downloads === 1) await new Promise(resolve => { release = resolve })
+      if (downloads === 1) {
+        downloadStarted.resolve()
+        await downloadRelease.promise
+      }
       return { ok: true, data: Buffer.from('PNG'), contentType: 'image/png' }
     }
     try {
@@ -1933,16 +1945,22 @@ test('停止发生在媒体准备期间：keep 重投完整原始消息，默认
       await env.store.setMode(ev.chatKey, 'chat')
       await env.bridge.handleUserMessage(ev)
       await time.advance(600)
-      assert.equal(typeof release, 'function')
-      await env.bridge.stop(ev.chatKey, { keepQueue })
-      release()
-      await tick()
+      // 建会话会写盘；假时钟到期并不保证媒体下载已经开始。
+      await downloadStarted.promise
       const agent = env.agents.live.get(env.agents.created[0].sessionId)
+      const followup = agent.followup
+      agent.followup = message => { followup(message); delivered.resolve() }
+      await env.bridge.stop(ev.chatKey, { keepQueue })
+      downloadRelease.resolve()
+      await imageSaved.promise
+      // 附件保存后只剩已决 Promise 的内容构造/代际复查，等这一轮微任务结束。
+      await new Promise(resolve => setImmediate(resolve))
       assert.equal(agent.followed.length, 0, '旧媒体准备完成后也不能投递旧代际')
       await time.advance(600)
+      if (keepQueue) await delivered.promise
       assert.equal(agent.followed.length, keepQueue ? 1 : 0)
       if (keepQueue) assert.equal(agent.followed[0].content.filter(x => x.type === 'image').length, 1)
-    } finally { await env.scope.dispose() }
+    } finally { downloadRelease.resolve(); await env.scope.dispose() }
   }
 })
 

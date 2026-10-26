@@ -461,21 +461,66 @@ test('P5 capabilities：声明支持图片/文件/语音/视频；参数错误�
   assert.match(channel.error, /频道不支持媒体上传/)
 })
 
-test('代理环境变量：直连模式下明确报错（P6 实现代理）', async t => {
-  const env = await setup({ deps: { socketFactory: undefined } })
-  t.after(() => cleanup(env))
-  const saved = process.env.HTTPS_PROXY
-  process.env.HTTPS_PROXY = 'http://127.0.0.1:7890'
-  try {
-    await env.transport.start()
-    await tick(60)
-    const phase = env.transport.status().phase
-    assert.ok(['reconnecting', 'connecting', 'disconnected'].includes(phase), `代理下不应假报 connected，实际 ${phase}`)
-    assert.match(env.transport.status().lastError, /代理/)
-  } finally {
-    if (saved === undefined) delete process.env.HTTPS_PROXY
-    else process.env.HTTPS_PROXY = saved
-    await cleanup(env)
+test('代理环境变量：依赖缺失与可用路径均隔离宿主依赖和真实代理', async t => {
+  const saved = process.env.WSS_PROXY
+  const proxyUrl = 'http://proxy.invalid:7890'
+  process.env.WSS_PROXY = proxyUrl // 最高优先级，避免 CI 的其它代理环境变量干扰。
+  t.after(() => {
+    if (saved === undefined) delete process.env.WSS_PROXY
+    else process.env.WSS_PROXY = saved
+  })
+
+  for (const available of [false, true]) {
+    await t.test(available ? '依赖可用：传递代理 agent 并完成握手' : '依赖缺失：返回可操作错误且不假报连接', async t => {
+      const httpCalls = []
+      const sockets = []
+      let loaderCalls = 0
+      const env = await setup({ deps: {
+        socketFactory: undefined,
+        maxReconnectAttempts: 0,
+        // HTTP 也隔离，不能因 CI 安装了 undici 而连接真实代理。
+        fetchImpl: async url => {
+          const path = new URL(url).pathname
+          httpCalls.push(path)
+          assert.ok(['/app/getAppAccessToken', '/gateway'].includes(path))
+          return { ok: true, json: async () => path === '/gateway'
+            ? { url: 'wss://gateway.invalid/ws' }
+            : { access_token: 'fixture-token', expires_in: 7200 } }
+        },
+        proxyLoader: async () => {
+          loaderCalls += 1
+          if (!available) throw new Error('Cannot find package ws')
+          const socket = await env.server.socketFactory()
+          return {
+            WebSocket: class {
+              constructor(url, options) { sockets.push({ url, options }); return socket }
+            },
+            HttpsProxyAgent: class {
+              constructor(url) { this.proxyUrl = url }
+            },
+          }
+        },
+      } })
+      t.after(() => cleanup(env))
+      const started = await env.transport.start()
+      assert.equal(loaderCalls, 1)
+      assert.deepEqual(httpCalls, ['/app/getAppAccessToken', '/gateway'])
+      if (available) {
+        await tick(40)
+        assert.equal(started, true)
+        assert.equal(env.transport.status().connected, true)
+        assert.equal(env.transport.status().lastError, '')
+        assert.equal(sockets.length, 1)
+        assert.equal(sockets[0].url, 'wss://gateway.invalid/ws')
+        assert.equal(sockets[0].options.agent.proxyUrl, proxyUrl)
+      } else {
+        assert.equal(started, false)
+        assert.equal(env.transport.status().connected, false)
+        assert.equal(env.transport.status().phase, 'disconnected')
+        assert.match(env.transport.status().lastError, /ws \/ https-proxy-agent 不可用.*请安装/s)
+        assert.equal(env.server.sockets.size, 0)
+      }
+    })
   }
 })
 

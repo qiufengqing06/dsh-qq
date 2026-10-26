@@ -112,6 +112,7 @@ function page(options = {}) {
         }
         data = previewFailure ? { ok: false, error: previewFailure } : {
           ok: true, effective, model: { provider: 'fixture', model: 'mock-model' },
+          ...(body.memorySnapshot ? { memorySnapshot: { ...body.memorySnapshot, personaIdentity: body.memorySnapshot.personaId || 'preview:unbound', readOnly: true, text: '只读记忆内容', recordIds: ['fixture-memory-1'] } } : {}),
           ...((body.message || body.imageStickerId) ? (options.actions ? { reply: '', actions: options.actions, warnings: ['仅图文预演'] } : { reply: '试聊回复：' + body.message }) : {}),
         }
       } else {
@@ -347,6 +348,44 @@ test('试聊期间禁止重复请求，失败保留消息与草稿，重试后�
   assert.match(app.field('trial-log').textContent, /这句稍后重试/)
   await app.click('清空试聊')
   assert.equal(app.field('trial-log').textContent, '')
+  assert.deepEqual(app.posts, [])
+})
+
+test('预演记忆：默认不读，显式开启后携带相同对话范围并展示实际引用', async () => {
+  const chatKey = 'qqbot:fixture:group:10001'
+  const app = page({ chatKey }); await app.open()
+  assert.equal(app.field('trial-memory').disabled, true)
+  app.field('trial-chat').value = chatKey; app.field('trial-chat').emit('change')
+  assert.equal(app.field('trial-memory').disabled, false)
+  app.input('trial-message', '先不用记忆'); await app.click('试聊')
+  assert.equal(Object.hasOwn(app.previews[0], 'memorySnapshot'), false)
+  app.field('trial-memory').checked = true; app.field('trial-memory').emit('change')
+  app.input('trial-message', '使用只读记忆'); await app.click('试聊')
+  const request = app.previews[1]
+  assert.deepEqual(request.memorySnapshot, { chatKey, mode: request.mode, personaId: '002' })
+  assert.equal(request.chatKey, chatKey); assert.deepEqual(request.history, [])
+  assert.match(app.roots.get('prompts').textContent, /本次使用的只读记忆（1 条）/)
+  assert.match(app.roots.get('prompts').textContent, /fixture-memory-1/)
+  assert.match(app.roots.get('prompts').textContent, /只读记忆内容/)
+  await app.click('清空试聊')
+  assert.doesNotMatch(app.roots.get('prompts').textContent, /fixture-memory-1/)
+  assert.deepEqual(app.posts, [])
+})
+
+test('新角色预演：只请求客观事实，不使用尚未保存的编号作为已有角色身份', async () => {
+  const chatKey = 'qqbot:fixture:group:10001'
+  const app = page({ chatKey }); await app.open('')
+  app.input('id', 'not-saved'); app.input('name', '未保存角色'); app.input('text', '新角色正文')
+  app.field('trial-chat').value = chatKey; app.field('trial-chat').emit('change')
+  app.field('trial-memory').checked = true; app.field('trial-memory').emit('change')
+  app.input('trial-message', '只读一下事实'); await app.click('试聊')
+  assert.deepEqual(app.previews[0].memorySnapshot, { chatKey, mode: 'chat' })
+  app.field('trial-chat').value = ''; app.field('trial-chat').emit('change')
+  assert.equal(app.field('trial-memory').checked, false)
+  assert.equal(app.field('trial-memory').disabled, true)
+  app.input('trial-message', '不读记忆'); await app.click('试聊')
+  assert.equal(Object.hasOwn(app.previews[1], 'memorySnapshot'), false)
+  assert.deepEqual(app.previews[1].history, [])
   assert.deepEqual(app.posts, [])
 })
 

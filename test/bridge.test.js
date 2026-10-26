@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -8,6 +8,8 @@ import { resolveConfig } from '../lib/config.js'
 import { createStore } from '../lib/store.js'
 import { createMockTransport } from '../lib/mock.js'
 import { createGroupMemory } from '../lib/group-memory.js'
+import { createConversationMemory } from '../lib/conversation-memory.js'
+import { createConversationState } from '../lib/conversation-state.js'
 import { createResourceScope } from '../lib/scope.js'
 import { CHAT_INPUT_WINDOW_MS, clipChatReply, createBridge, dshUiFencesToText, extractAssistantText, extractTurnError, lastEventSeq, splitChatReply, stripDshUiFences, toPlainText } from '../lib/bridge.js'
 import { createFakeAgents, createFakeCtx, createLogger } from './helpers/fake-ctx.js'
@@ -1301,8 +1303,8 @@ test('聊天模式：回复拆成多条，工作模式仍整段发送', async ()
     random: () => 0,
   })
   const ev = transport.injectText('聊聊')
-  await bridge.handleUserMessage(ev)
   await store.setMode(ev.chatKey, 'chat')
+  await bridge.handleUserMessage(ev)
   const agent = agents.live.get(agents.created[0].sessionId)
   agent.reply('第一句话要稍微长一点，保证整体长度超过八十个字符，这样才会触发拆分逻辑。第二句话也要稍微长一点，保证拆分之后每条都有实际内容。第三句话同样长一点，用来验证最多三条的上限。第四句话会被合并进最后一条。')
   agent.ctx.emitStatus('idle')
@@ -1331,9 +1333,9 @@ test('切人设：旧人设下尚未发出的气泡失效', async () => {
   await store.setPersona('a', { name: 'A', text: '你是 A' })
   await store.setPersona('b', { name: 'B', text: '你是 B' })
   const ev = transport.injectText('聊聊')
-  await bridge.handleUserMessage(ev)
   await store.setMode(ev.chatKey, 'chat')
   await store.bindPersona(ev.chatKey, 'a', 'chat')
+  await bridge.handleUserMessage(ev)
   const agent = agents.live.get(agents.created[0].sessionId)
   agent.reply('第一句话要稍微长一点，保证整体长度超过八十个字符，这样才会触发拆分逻辑。第二句话也要稍微长一点，保证拆分之后每条都有实际内容。第三句话同样长一点，用来验证最多三条的上限。')
   agent.ctx.emitStatus('idle')
@@ -1381,8 +1383,8 @@ test('停止/切模式：已排队的聊天气泡不再发送（回复代际）'
     random: () => 0,
   })
   const ev = transport.injectText('聊聊')
-  await bridge.handleUserMessage(ev)
   await store.setMode(ev.chatKey, 'chat')
+  await bridge.handleUserMessage(ev)
   const agent = agents.live.get(agents.created[0].sessionId)
   const long = '第一句话要稍微长一点，保证整体长度超过八十个字符，这样才会触发拆分逻辑。第二句话也要稍微长一点，保证拆分之后每条都有实际内容。第三句话同样长一点，用来验证最多三条的上限。'
   agent.reply(long)
@@ -1399,8 +1401,8 @@ test('停止/切模式：已排队的聊天气泡不再发送（回复代际）'
     random: () => 0,
   })
   const ev2 = second.transport.injectText('聊聊')
-  await second.bridge.handleUserMessage(ev2)
   await second.store.setMode(ev2.chatKey, 'chat')
+  await second.bridge.handleUserMessage(ev2)
   const agent2 = second.agents.live.get(second.agents.created[0].sessionId)
   agent2.reply(long)
   agent2.ctx.emitStatus('idle')
@@ -1428,6 +1430,7 @@ test('聊天模式工具边界：read/bash 被 guard 拒绝，web_fetch/表情�
   assert.match(guards[0]({ name: 'bash' }), /聊天模式内部限制/)
   assert.equal(guards[0]({ name: 'web_fetch' }), undefined)
   assert.equal(guards[0]({ name: 'send_sticker' }), undefined)
+  assert.equal(guards[0]({ name: 'qq_memory' }), undefined)
 })
 
 test('会话提示词：setup 注册动态 section，保存后下一回合立即生效', async () => {
@@ -1513,7 +1516,10 @@ test('有序回复：停机或切人设期间取消后续图，返回实际发�
     unblock() // 首张图也有自然反应时间；等它发出后再取消第二张。
     await tick()
     if (kind === 'stop') await env.bridge.stop(ev.chatKey)
-    else await env.store.setPersona('changed', { name: 'changed', text: '换个说话方式' })
+    else {
+      await env.store.setPersona('changed', { name: 'changed', text: '换个说话方式' })
+      await env.store.bindPersona(ev.chatKey, 'changed', 'chat')
+    }
     unblock()
     const result = await pending
     assert.equal(result.ok, false)
@@ -2117,4 +2123,411 @@ test('发图回执进入真实群缓冲时标为画面参考，普通文字仍�
     assert.ok(pending.text.includes(desc))
     assert.equal(memory.pendingContext(ev.chatKey, 'work').count, 0)
   } finally { await env.scope.dispose() }
+})
+
+// Actual DSH records the inbox splice before emitting inserted; ordinary fakes
+// intentionally omit this so tests can also cover absent/rejected receipts.
+function emitInboxReceipts(agent) {
+  if (agent.receiptsInstalled) return
+  agent.receiptsInstalled = true
+  for (const name of ['followup', 'steer']) {
+    const send = agent[name].bind(agent)
+    agent[name] = message => {
+      const result = send(message)
+      agent.session.append('agent/inbox/spliced', { inserted: [message] })
+      agent.ctx.emit('agent/inbox/inserted', { message })
+      return result
+    }
+  }
+}
+
+function conversationFixture() {
+  const calls = { prepared: [], accepted: [], ended: [], cancelled: [], sent: [] }
+  const policy = { contextEpoch: 0, minRestorableContextEpoch: 0, contextResetPending: false }
+  return { calls, policy, hooks: {
+    sessionState: async () => ({ ...policy }),
+    onSessionReady: async () => { policy.contextResetPending = false },
+    prepare: async (ev, meta) => { calls.prepared.push(meta); return { context: '[只读记忆] 测试数据', expected: { epoch: policy.contextEpoch } } },
+    onAccepted: async (context, receipt) => { calls.accepted.push({ context, receipt }) },
+    onTurnEnd: async (context, result) => { calls.ended.push({ context, result }) },
+    onCancel: async context => { calls.cancelled.push(context) },
+    onSent: async (context, receipt) => { calls.sent.push({ context, receipt }) },
+  } }
+}
+
+function consumeInput(agent, message, turn = 1) {
+  agent.session.append('turn/start', { turn })
+  agent.session.append('user/message', message)
+}
+
+test('上下文提交只认真实inbox收据；重复事件幂等，拒绝或缺收据不消费', async () => {
+  for (const outcome of ['accepted', 'missing', 'rejected']) {
+    let commits = 0
+    const env = await setup({}, {}, {}, {
+      ambientContext: async () => ({ recent: '前面的消息', commit: () => { commits += 1 } }),
+      onAgentReady: agent => {
+        if (outcome === 'accepted') emitInboxReceipts(agent)
+        if (outcome === 'rejected') agent.followup = () => { throw new Error('inbox rejected') }
+      },
+    })
+    const ev = env.transport.injectText('当前消息', { target: { kind: 'group', groupId: 'g' } })
+    if (outcome === 'rejected') await assert.rejects(env.bridge.handleUserMessage(ev), /inbox rejected/)
+    else await env.bridge.handleUserMessage(ev)
+    assert.equal(commits, outcome === 'accepted' ? 1 : 0)
+    env.scope.dispose()
+  }
+})
+
+test('上下文准备期间stop不提交水位、不投递迟到消息', async () => {
+  let release, entered, commits = 0
+  const ready = new Promise(resolve => { entered = resolve })
+  const env = await setup({}, {}, {}, {
+    ambientContext: async () => { entered(); await new Promise(resolve => { release = resolve }); return { recent: '旧上下文', commit: () => { commits += 1 } } },
+    onAgentReady: emitInboxReceipts,
+  })
+  const ev = env.transport.injectText('当前消息', { target: { kind: 'group', groupId: 'g' } })
+  const pending = env.bridge.handleUserMessage(ev)
+  await ready
+  await env.bridge.stop(ev.chatKey)
+  release()
+  assert.equal((await pending).accepted, false)
+  assert.equal(commits, 0)
+  assert.equal(env.agents.live.get(env.agents.created[0].sessionId).followed.length, 0)
+  env.scope.dispose()
+})
+
+test('记忆hooks：冻结来源、实际消费后提供工具上下文、送达与正常结束分开记录', async () => {
+  const fixture = conversationFixture()
+  const env = await setup({}, {}, {}, { conversation: fixture.hooks, onAgentReady: emitInboxReceipts })
+  const ev = { ...env.transport.injectText('我喜欢短句', { messageId: 'source-1' }) }
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.bridge.handleUserMessage(ev)
+  const agent = env.agents.live.get(env.agents.created[0].sessionId)
+  assert.equal(fixture.calls.accepted.length, 1)
+  assert.equal(env.bridge.memoryContextForSession(agent.session.id), null, '仅入箱还不是当前模型消费的回合')
+  consumeInput(agent, agent.followed[0], 7)
+  const context = env.bridge.memoryContextForSession(agent.session.id)
+  assert.equal(context.hostTurnId, 7)
+  assert.equal(context.events[0].messageId, 'source-1')
+  ev.text = '之后被修改'
+  assert.equal(context.events[0].text, '我喜欢短句')
+  assert.equal(Object.isFrozen(context.events[0].sender), true)
+  const sent = await env.bridge.dispatchReply([{ type: 'text', text: '记下啦' }], { agent })
+  assert.equal(sent.ok, true)
+  agent.endTurn()
+  agent.ctx.emitStatus('idle')
+  await tick()
+  assert.equal(fixture.calls.sent.length, 1)
+  assert.equal(fixture.calls.ended.length, 1)
+  assert.equal(fixture.calls.ended[0].result.success, true)
+  assert.equal(fixture.calls.ended[0].result.sentCount, 1)
+  assert.equal(env.bridge.memoryContextForSession(agent.session.id), null)
+  env.scope.dispose()
+})
+
+test('失败与内部任务不冒充可学习的正常真实回合', async () => {
+  const fixture = conversationFixture()
+  const env = await setup({}, {}, {}, { conversation: fixture.hooks, onAgentReady: emitInboxReceipts })
+  const ev = env.transport.injectText('记住这个')
+  await env.bridge.handleUserMessage(ev)
+  const agent = env.agents.live.get(env.agents.created[0].sessionId)
+  consumeInput(agent, agent.followed[0])
+  agent.endTurn({ completed: false, error: '模型失败' })
+  await tick()
+  assert.equal(fixture.calls.ended[0].result.success, false)
+  agent.ctx.emitStatus('idle')
+  await env.bridge.handleUserMessage(env.transport.injectText('定时自言自语'), { internal: true })
+  assert.equal(fixture.calls.prepared.length, 1)
+  assert.equal(agent.followed.at(-1).source.kind, 'plugin')
+  env.scope.dispose()
+})
+
+test('局部人设版本：编辑无关人设不取消当前回复', async () => {
+  const env = await setup()
+  const ev = env.transport.injectText('你好')
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.bridge.handleUserMessage(ev)
+  const agent = env.agents.live.get(env.agents.created[0].sessionId)
+  await env.store.setPersona('unrelated', { text: '另一群的人设' })
+  assert.equal((await env.bridge.dispatchReply([{ type: 'text', text: '你好呀' }], { agent })).ok, true)
+  env.scope.dispose()
+})
+
+test('人设与遗忘边界：切身份新建宿主，受污染历史即使pending清除也不能恢复', async () => {
+  const fixture = conversationFixture()
+  const env = await setup({}, {}, {}, { conversation: fixture.hooks, onAgentReady: emitInboxReceipts })
+  const ev = env.transport.injectText('你好')
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.store.setPersona('a', { text: '身份A' })
+  await env.store.setPersona('b', { text: '身份B' })
+  await env.store.bindPersona(ev.chatKey, 'a', 'chat')
+  await env.bridge.handleUserMessage(ev)
+  const old = env.bridge.currentSession(ev.chatKey)
+  await env.store.bindPersona(ev.chatKey, 'b', 'chat')
+  await env.bridge.handleUserMessage(env.transport.injectText('新的问题'))
+  assert.notEqual(env.bridge.currentSession(ev.chatKey), old)
+  let index = env.store.sessions(ev.chatKey, 'chat').findIndex(entry => entry.sessionId === old)
+  assert.equal(await env.bridge.switchSession(ev.chatKey, index), null)
+  const contaminated = env.bridge.currentSession(ev.chatKey)
+  fixture.policy.contextEpoch = fixture.policy.minRestorableContextEpoch = 1
+  fixture.policy.contextResetPending = true
+  await env.bridge.invalidateContext(ev.chatKey, { keepQueue: false })
+  await env.bridge.handleUserMessage(env.transport.injectText('遗忘之后'))
+  assert.equal(fixture.policy.contextResetPending, false)
+  index = env.store.sessions(ev.chatKey, 'chat').findIndex(entry => entry.sessionId === contaminated)
+  assert.equal(await env.bridge.switchSession(ev.chatKey, index), null)
+  env.scope.dispose()
+})
+
+test('恢复平静仅失效旧回复：尚未消费的输入窗口仍会投递', async () => {
+  const time = chatClock()
+  const env = await setup({}, {}, {}, { ...time, chatInputWindowMs: 600 })
+  const ev = env.transport.injectText('这个问题还要回答')
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.bridge.handleUserMessage(ev)
+  env.bridge.invalidateReplies(ev.chatKey)
+  await time.advance(600)
+  const agent = env.agents.live.get(env.agents.created[0].sessionId)
+  assert.equal(agent.followed.length, 1)
+  agent.reply('当然继续回答').endTurn()
+  await time.advance(3000)
+  assert.equal(env.transport.lastText(), '当然继续回答')
+  env.scope.dispose()
+})
+
+test('stop --keep 将宿主未消费inbox迁至新代际，恢复后仍可正常回复', async () => {
+  const fixture = conversationFixture()
+  const env = await setup({}, {}, {}, { conversation: fixture.hooks, onAgentReady: emitInboxReceipts })
+  const ev = env.transport.injectText('保留这个问题')
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.bridge.handleUserMessage(ev)
+  const agent = env.agents.live.get(env.agents.created[0].sessionId)
+  let cancelOptions
+  agent.cancel = (_cause, options) => { cancelOptions = options }
+  await env.bridge.stop(ev.chatKey, { keepQueue: true })
+  assert.equal(cancelOptions.keepInbox, true)
+  consumeInput(agent, agent.followed[0], 2)
+  assert.ok(env.bridge.memoryContextForSession(agent.session.id))
+  agent.reply('继续处理保留的问题').endTurn()
+  await tick()
+  assert.equal(env.transport.lastText(), '继续处理保留的问题')
+  assert.equal(fixture.calls.ended[0].result.success, true)
+  env.scope.dispose()
+})
+
+test('可选上下文重建保留未消费请求，但重新准备ambient与快照', async () => {
+  const fixture = conversationFixture()
+  let context = '删除前的环境'
+  const env = await setup({}, {}, {}, { conversation: fixture.hooks, onAgentReady: emitInboxReceipts,
+    ambientContext: async () => ({ recent: context }),
+  })
+  const ev = env.transport.injectText('这个独立问题还没回答', { target: { kind: 'group', groupId: 'g' } })
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.bridge.handleUserMessage(ev)
+  const first = env.bridge.currentSession(ev.chatKey)
+  fixture.policy.contextEpoch = fixture.policy.minRestorableContextEpoch = 1
+  fixture.policy.contextResetPending = true
+  context = '删除后的新环境'
+  await env.bridge.invalidateContext(ev.chatKey, { keepQueue: true })
+  const second = env.bridge.currentSession(ev.chatKey)
+  assert.notEqual(first, second)
+  const agent = env.agents.live.get(second)
+  assert.equal(agent.followed.length, 1)
+  const text = agent.followed[0].content.map(block => block.text ?? '').join('\n')
+  assert.match(text, /这个独立问题还没回答/)
+  assert.match(text, /删除后的新环境/)
+  assert.doesNotMatch(text, /删除前的环境/)
+  assert.equal(fixture.calls.prepared.at(-1).sessionId, second)
+  env.scope.dispose()
+})
+
+test('steer在首条消费前到达也合并来源；工具回复后的补充获得新逻辑回合', async () => {
+  const fixture = conversationFixture()
+  const env = await setup({}, {}, {}, { conversation: fixture.hooks, onAgentReady: emitInboxReceipts })
+  const ev = env.transport.injectText('第一份来源', { messageId: 's1' })
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.bridge.handleUserMessage(ev)
+  await env.bridge.handleUserMessage(env.transport.injectText('第二份来源', { messageId: 's2' }))
+  const agent = env.agents.live.get(env.agents.created[0].sessionId)
+  consumeInput(agent, agent.followed[0], 3)
+  agent.session.append('user/message', agent.steered[0])
+  const first = env.bridge.memoryContextForSession(agent.session.id)
+  assert.deepEqual(first.events.map(event => event.messageId), ['s1', 's2'])
+  assert.equal(fixture.calls.prepared[0].turnId, fixture.calls.prepared[1].turnId)
+  await env.bridge.dispatchReply([{ type: 'text', text: '前两条收到' }], { agent })
+  await env.bridge.handleUserMessage(env.transport.injectText('新的补充', { messageId: 's3' }))
+  agent.session.append('user/message', agent.steered[1])
+  const second = env.bridge.memoryContextForSession(agent.session.id)
+  assert.notEqual(first.turnId, second.turnId)
+  assert.deepEqual(second.events.map(event => event.messageId), ['s3'])
+  agent.endTurn()
+  await tick()
+  assert.deepEqual(fixture.calls.ended.map(entry => entry.context.turnId), [first.turnId, second.turnId])
+  env.scope.dispose()
+})
+
+test('实际apply注册的qq_memory通过全局与会话guard，并受真实回合上下文约束', { timeout: 10000 }, async () => {
+  const { apply, getPluginHandle } = await import('../lib/index.js')
+  const agents = createFakeAgents(), registered = new Map(), globalGuards = []
+  const tools = {
+    register(tool) { registered.set(tool.name, tool); return () => registered.delete(tool.name) },
+    guard(fn) { globalGuards.push(fn); return () => {} },
+  }
+  const ctx = createFakeCtx({ services: { agents, tools } })
+  await apply(ctx, { transport: 'mock', autoConnect: false, dataDir: await mkdtemp(join(tmpdir(), 'dsh-qq-memory-guard-')),
+    stickers: { vision: { enabled: false } } })
+  const plugin = getPluginHandle(ctx)
+  try {
+    const ev = plugin.transport.injectText('只读查询')
+    await plugin.store.setMode(ev.chatKey, 'chat')
+    const sid = await plugin.bridge.newSession(ev.chatKey)
+    const agent = agents.live.get(sid)
+    emitInboxReceipts(agent)
+    const delivered = Promise.withResolvers()
+    const followup = agent.followup
+    agent.followup = message => { const result = followup(message); delivered.resolve(); return result }
+    const localGuards = []
+    await agents.created[0].setup({ tools: { guard: fn => { localGuards.push(fn); return () => {} } } }, agent)
+    assert.ok(registered.has('qq_memory'))
+    const exec = { name: 'qq_memory', agent }
+    for (const guard of [...globalGuards, ...localGuards]) assert.equal(guard(exec), undefined)
+    assert.ok(globalGuards.some(guard => guard({ name: 'bash', agent })), '全局guard仍拦工作工具')
+    assert.equal((await registered.get('qq_memory').execute({ action: 'search' }, exec)).ok, false, '没有真实入站不可伪造记忆轮次')
+    await plugin.bridge.handleUserMessage(ev)
+    await delivered.promise
+    assert.equal(agent.followed.length, 1)
+    consumeInput(agent, agent.followed[0], 1)
+    const result = await registered.get('qq_memory').execute({ action: 'search' }, exec)
+    assert.equal(result.ok, true)
+  } finally { await ctx.dispose(); await plugin.scope.dispose() }
+})
+
+test('恢复平静时已入箱的steer补充不随旧草稿一起丢失', async () => {
+  const fixture = conversationFixture()
+  const env = await setup({}, {}, {}, { conversation: fixture.hooks, onAgentReady: emitInboxReceipts })
+  const ev = env.transport.injectText('正在思考的旧问题', { messageId: 'first' })
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.bridge.handleUserMessage(ev)
+  const agent = env.agents.live.get(env.agents.created[0].sessionId)
+  consumeInput(agent, agent.followed[0], 1)
+  agent.reply('还没有发出去的草稿')
+  await env.bridge.handleUserMessage(env.transport.injectText('已经入箱的新补充', { messageId: 'second' }))
+  env.bridge.invalidateReplies(ev.chatKey)
+  agent.session.append('user/message', agent.steered[0])
+  agent.reply('按新补充重新回答').endTurn()
+  await tick()
+  assert.equal(env.transport.lastText(), '按新补充重新回答')
+  assert.equal(env.transport.dump().filter(item => item.kind === 'text').length, 1)
+  env.scope.dispose()
+})
+
+async function memoryBridgeFixture(t) {
+  const conversation = {}
+  const env = await setup({ groupMemory: { enabled: true } }, {}, {}, { conversation, onAgentReady: emitInboxReceipts })
+  const groupMemory = createGroupMemory({ dir: env.dir, config: env.config })
+  const state = createConversationState({ dir: env.dir })
+  const memory = createConversationMemory({ state, groupMemory, store: env.store, config: env.config })
+  Object.assign(conversation, memory)
+  memory.attach(env.bridge)
+  let completion
+  const ended = []
+  conversation.onTurnEndBatch = async entries => {
+    try {
+      await memory.onTurnEndBatch(entries)
+      ended.push(entries)
+      completion?.resolve(entries)
+    } catch (error) { completion?.reject(error); throw error }
+  }
+  t.after(async () => {
+    await env.scope.dispose()
+    await memory.dispose()
+    await rm(env.dir, { recursive: true, force: true })
+  })
+  return { ...env, memory, state, ended,
+    async manage(chatKey, body) {
+      const view = await memory.query({ chatKey, mode: 'chat' })
+      return memory.manage({ chatKey, mode: 'chat', expectedRevision: view.revision, ...body })
+    },
+    finish(agent, text = '收到') {
+      completion = Promise.withResolvers()
+      agent.reply(text).endTurn()
+      return completion.promise
+    },
+  }
+}
+
+test('真实记忆链：同轮已消费更正淘汰旧提案，仅保存更正后的本人偏好', { timeout: 5000 }, async t => {
+  const env = await memoryBridgeFixture(t)
+  const ev = env.transport.injectText('我喜欢香菜', { messageId: 'one', sender: { id: 'u' } })
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.manage(ev.chatKey, { action: 'settings', learningEnabled: true })
+  await env.bridge.handleUserMessage(ev)
+  const agent = env.agents.live.get(env.agents.created[0].sessionId)
+  consumeInput(agent, agent.followed[0])
+  const first = env.bridge.memoryContextForSession(agent.session.id)
+  env.memory.propose({ agent }, [{ type: 'fact', kind: 'preference', subjectId: 'u', explicit: true,
+    key: 'food', text: '喜欢香菜', sourceIds: ['one'] }])
+  await env.bridge.handleUserMessage(env.transport.injectText('说错了，我不喜欢香菜', { messageId: 'two', sender: { id: 'u' } }))
+  assert.equal(env.bridge.memoryContextForSession(agent.session.id), first, '入箱时仍保留已消费来源')
+  agent.session.append('user/message', agent.steered[0])
+  const corrected = env.bridge.memoryContextForSession(agent.session.id)
+  assert.equal(corrected.turnId, first.turnId)
+  assert.deepEqual(corrected.prepared.evidence.map(row => row.eventId), ['one', 'two'])
+  assert.equal(env.memory.propose({ agent }, [{ type: 'fact', kind: 'preference', subjectId: 'u', explicit: true,
+    key: 'food', text: '不喜欢香菜', sourceIds: ['two'] }]).staged, true)
+  await env.finish(agent)
+  const view = await env.memory.query({ chatKey: ev.chatKey, mode: 'chat' })
+  assert.deepEqual(view.items.map(item => item.text), ['不喜欢香菜'])
+  assert.equal(env.ended.length, 1)
+  assert.equal(env.ended[0].length, 1)
+})
+
+test('真实记忆链：同一宿主回合的两个逻辑答复原子校验，第二批不被首批版本更新误拒', { timeout: 5000 }, async t => {
+  const env = await memoryBridgeFixture(t)
+  const ev = env.transport.injectText('我喜欢香菜', { messageId: 'one', sender: { id: 'u' } })
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.manage(ev.chatKey, { action: 'settings', learningEnabled: true })
+  await env.bridge.handleUserMessage(ev)
+  const agent = env.agents.live.get(env.agents.created[0].sessionId)
+  consumeInput(agent, agent.followed[0])
+  const first = env.bridge.memoryContextForSession(agent.session.id)
+  env.memory.propose({ agent }, [{ type: 'fact', kind: 'preference', subjectId: 'u', explicit: true,
+    key: 'food', text: '喜欢香菜', sourceIds: ['one'] }])
+  assert.equal((await env.bridge.dispatchReply([{ type: 'text', text: '嗯嗯' }], { agent })).ok, true)
+  await env.bridge.handleUserMessage(env.transport.injectText('我喜欢短句', { messageId: 'two', sender: { id: 'u' } }))
+  agent.session.append('user/message', agent.steered[0])
+  const second = env.bridge.memoryContextForSession(agent.session.id)
+  assert.notEqual(second.turnId, first.turnId)
+  assert.equal(second.hostTurnId, first.hostTurnId)
+  env.memory.propose({ agent }, [{ type: 'fact', kind: 'preference', subjectId: 'u', explicit: true,
+    key: 'length', text: '喜欢短句', sourceIds: ['two'] }])
+  await env.finish(agent)
+  const view = await env.memory.query({ chatKey: ev.chatKey, mode: 'chat' })
+  assert.deepEqual(view.items.map(item => item.text).sort(), ['喜欢短句', '喜欢香菜'].sort())
+  assert.equal(env.ended.length, 1)
+  assert.equal(env.ended[0].length, 2)
+  assert.ok(env.ended[0].every(entry => entry.result.success && entry.result.sentCount === 1))
+})
+
+test('真实记忆链：自动建会话及建会话失败保留情绪，仅显式新会话成功重置', { timeout: 5000 }, async t => {
+  const env = await memoryBridgeFixture(t)
+  const ev = env.transport.injectText('哈哈真有趣', { messageId: 'happy', sender: { id: 'u' } })
+  await env.store.setMode(ev.chatKey, 'chat')
+  await env.manage(ev.chatKey, { action: 'settings', emotionEnabled: true })
+  const scope = { chatKey: ev.chatKey, mode: 'chat' }
+  const personaIdentity = env.store.personaIdentityFor(ev.chatKey, 'chat')
+  const seeded = await env.state.applyProposals(scope, {
+    personaIdentity, expected: env.state.capture(scope, personaIdentity), turnId: 'previous-session',
+    evidence: [{ ...scope, eventId: ev.messageId, senderId: 'u', receivedAt: ev.timestamp, text: ev.text, turnId: 'previous-session' }],
+    operations: [{ type: 'mood', label: 'happy', intensity: 0.4, targetMemberId: 'u', reason: '一起开玩笑', sourceIds: ['happy'] }],
+  })
+  assert.equal(seeded.applied, 1)
+  await env.bridge.handleUserMessage(ev)
+  assert.equal((await env.memory.query(scope)).mood.label, 'happy', '普通sessionReady不能顺便重置情绪')
+  env.agents.failed.create = 'test create failed'
+  assert.equal(await env.bridge.newSession(ev.chatKey), null)
+  assert.equal((await env.memory.query(scope)).mood.label, 'happy')
+  env.agents.failed.create = null
+  assert.ok(await env.bridge.newSession(ev.chatKey))
+  assert.equal((await env.memory.query(scope)).mood, null)
 })

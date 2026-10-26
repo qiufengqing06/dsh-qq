@@ -224,7 +224,7 @@
   .fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px 16px; }
   .field label { display:block; font-size:12.5px; font-weight:500; margin-bottom:7px; color:var(--text); }
   .field .help { margin-top:6px; font-size:11.5px; color:var(--muted); line-height:1.45; }
-  input[type=text], input[type=password], input[type=number], select { width:100%; height:38px; padding:0 11px; border:1px solid var(--control); border-radius:11px; background:var(--surface); color:var(--text); font:inherit; font-size:14px; transition:border-color .16s var(--ease), box-shadow .16s var(--ease); }
+  input[type=text], input[type=search], input[type=password], input[type=number], select { width:100%; height:38px; padding:0 11px; border:1px solid var(--control); border-radius:11px; background:var(--surface); color:var(--text); font:inherit; font-size:14px; transition:border-color .16s var(--ease), box-shadow .16s var(--ease); }
   input::placeholder { color:var(--faint); opacity:.85; }
   input:focus-visible, select:focus-visible { outline:none; border-color:var(--hue); box-shadow:0 0 0 3px color-mix(in srgb, var(--hue) 16%, transparent); }  /* taste-skill-ignore: 参考 NapCat WebUI 的柔和质感（用户指定），仅此一处环境光/细阴影 */
   .switchrow { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -344,6 +344,34 @@
   .group-editor textarea:focus { outline:none; border-color:var(--hue); box-shadow:0 0 0 3px var(--hue-pale); }
   .group-editor .row { display:flex; align-items:center; gap:10px; }
   .group-editor .hint { flex:1; font-size:11.5px; color:var(--muted); }
+  .memory-toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin-bottom:14px; }
+  .memory-toolbar .field { flex:1 1 160px; min-width:0; }
+  .memory-toolbar .memory-scope { flex:2 1 260px; }
+  .memory-toolbar select, .memory-toolbar input, .memory-editor select, .memory-editor input { width:100%; min-width:0; }
+  .memory-layout { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(280px,1fr); gap:24px; align-items:start; }
+  .memory-layout > * { min-width:0; }
+  .memory-section { padding:14px 0; border-top:1px solid var(--rule); min-width:0; }
+  .memory-section h3 { font-size:14px; margin-bottom:8px; }
+  .memory-section .hint, .memory-meta { color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+  .memory-row { padding:12px 0; border-bottom:1px solid var(--rule); overflow-wrap:anywhere; }
+  .memory-row p { white-space:pre-wrap; margin:5px 0 8px; }
+  .memory-row .actions { flex-wrap:wrap; gap:6px; }
+  .memory-row details { margin:8px 0; font-size:12px; color:var(--muted); }
+  .memory-row summary, .memory-legacy > summary { cursor:pointer; }
+  .memory-row ul { padding-left:20px; }
+  .memory-editor { padding:14px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); margin:12px 0; }
+  .memory-editor .field { margin-bottom:10px; }
+  .memory-editor textarea { min-height:92px; }
+  .memory-status { min-height:24px; margin:8px 0; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+  .memory-status.bad { color:var(--negative); }
+  .memory-toggle { display:flex; align-items:center; gap:9px; padding:7px 0; font-size:13px; cursor:pointer; }
+  .memory-toggle input { width:17px; height:17px; flex:none; accent-color:var(--hue); }
+  .memory-legacy { margin-top:20px; border-top:1px solid var(--rule); padding-top:12px; }
+  .memory-legacy > summary { font-size:13px; color:var(--muted); }
+  .memory-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin:10px 0; }
+  .memory-empty { color:var(--muted); font-size:13px; padding:16px 0; }
+  @media (max-width:1100px) { .memory-layout { grid-template-columns:1fr; gap:12px; } }
+  @media (max-width:560px) { .memory-toolbar .field { flex-basis:100%; } .memory-toolbar .memory-filter { flex-basis:calc(50% - 5px); } .memory-row .btn, .memory-editor .btn { min-height:40px; } }
   .persona-fields { display:grid; grid-template-columns:160px minmax(0,1fr); gap:10px; }
   .persona-section { padding:14px 0 4px; border-top:1px solid var(--rule); min-width:0; }
   .persona-section h3 { margin:0 0 6px; font-size:14px; font-weight:600; }
@@ -475,7 +503,7 @@
       <a class="nav-item" href="#sec-napcat" data-sec="sec-napcat" title="个人线宿主"><span class="ico" data-icon="terminal"></span><span class="nav-label">个人线宿主</span></a>
       <a class="nav-item" href="#sec-cred" data-sec="sec-cred" title="登录与凭据"><span class="ico" data-icon="key"></span><span class="nav-label">登录与凭据</span></a>
       <a class="nav-item" href="#sec-identity" data-sec="sec-identity" title="身份与授权"><span class="ico" data-icon="user"></span><span class="nav-label">身份与授权</span><span class="nav-badge" id="badge-pending">–</span></a>
-      <a class="nav-item" href="#sec-groups" data-sec="sec-groups" title="群记忆"><span class="ico" data-icon="book"></span><span class="nav-label">群记忆</span><span class="nav-badge" id="badge-groups">–</span></a>
+      <a class="nav-item" href="#sec-groups" data-sec="sec-groups" title="对话记忆"><span class="ico" data-icon="book"></span><span class="nav-label">对话记忆</span><span class="nav-badge" id="badge-groups">–</span></a>
       <a class="nav-item" href="#sec-prompts" data-sec="sec-prompts" title="会话提示词"><span class="ico" data-icon="message"></span><span class="nav-label">会话提示词</span><span class="nav-badge" id="badge-prompts">–</span></a>
       <a class="nav-item" href="#sec-stickers" data-sec="sec-stickers" title="表情包"><span class="ico" data-icon="image"></span><span class="nav-label">表情包</span><span class="nav-badge" id="badge-stickers">–</span></a>
       <a class="nav-item" href="#sec-chat-control" data-sec="sec-chat-control" title="聊天控制"><span class="ico" data-icon="sliders"></span><span class="nav-label">聊天控制</span></a>
@@ -546,8 +574,9 @@
     </section>
 
     <section class="card" id="sec-groups">
-      <div class="card-head"><span class="ico" data-icon="book"></span><h2>群记忆</h2><span class="right" id="groups-note"></span></div>
-      <div id="groups"></div>
+      <div class="card-head"><span class="ico" data-icon="book"></span><h2>对话记忆</h2></div>
+      <div id="conversation-memory"></div>
+      <details class="memory-legacy"><summary>旧群笔记兼容入口 <span id="groups-note"></span></summary><div id="groups"></div></details>
     </section>
 
     <section class="card" id="sec-prompts">
@@ -1326,20 +1355,24 @@
 
   /* ---------- 群记忆（群笔记）---------- */
   var editingGroupFile = '';
+  var groupDrafts = {};
 
   /** 文件名 → 人看标签：onebot_100002_group_100003.md → 群 100003 */
   function groupLabel(file) {
-    var name = String(file || '').replace(/\.md$/, '');
+    var name = String(file || '').replace(/(?:\.chat)?\.md$/, '');
     var match = name.match(/(?:group|dm)_([A-Za-z0-9_-]+)$/);
-    if (match) return (/_group_/.test(name) ? '群 ' : '私聊 ') + match[1];
+    if (match) return (/_group_/.test(name) ? '群 ' : '私聊 ') + match[1] + (/\.chat\.md$/.test(file) ? ' · 聊天模式' : ' · 工作模式');
     return name;
   }
 
   function renderGroups() {
     var host = document.getElementById('groups');
     if (!host) return;
+    var opened = document.getElementById('group-editor-text');
+    if (editingGroupFile && opened && opened._groupFile === editingGroupFile) return;
     host.textContent = '';
     var rows = Array.isArray(S.groups) ? S.groups : [];
+    var structured = Boolean(S.memory && S.memory.available);
     var badge = document.getElementById('badge-groups');
     if (badge) { badge.textContent = rows.length === 0 ? '0' : String(rows.length); }
     var note = document.getElementById('groups-note');
@@ -1349,13 +1382,14 @@
       return;
     }
     rows.forEach(function (row) {
+      var readOnly = structured && /\.chat\.md$/.test(row.file);
       host.appendChild(el('div', { className: 'group-row' }, [
         el('div', { className: 'grow' }, [
           el('div', { className: 'name', text: groupLabel(row.file) }),
           el('div', { className: 'sub', text: row.chars + ' 字 · 更新于 ' + fmtTime(row.updatedAt) })
         ]),
-        btn('编辑', 'sm', function () { openGroupEditor(row.file); }),
-        btn('清空', 'quiet sm', function () {
+        btn(readOnly ? '查看' : '编辑', 'sm', function () { openGroupEditor(row.file); }),
+        readOnly ? null : btn('清空', 'quiet sm', function () {
           if (window.confirm('确定清空「' + groupLabel(row.file) + '」的笔记？这个操作不可撤销。')) {
             saveGroupNote(row.file, '');
           }
@@ -1363,25 +1397,36 @@
       ]));
     });
     if (editingGroupFile !== '') {
+      var readOnly = structured && /\.chat\.md$/.test(editingGroupFile);
       var editor = el('div', { className: 'group-editor' });
-      var textarea = el('textarea', { id: 'group-editor-text', placeholder: '加载中…' });
+      var file = editingGroupFile;
+      var draft = groupDrafts[file] || (groupDrafts[file] = { text: '', loaded: false, dirty: false, revision: null });
+      var textarea = el('textarea', { id: 'group-editor-text', name: 'group-note', 'aria-label': '旧群笔记内容', placeholder: '加载中…' });
+      textarea._groupFile = file;
+      textarea.value = draft.text;
+      textarea.readOnly = readOnly;
       editor.appendChild(el('div', { className: 'row' }, [
         el('div', { className: 'hint', text: groupLabel(editingGroupFile) + ' · ' + editingGroupFile }),
         el('span', { className: 'hint', id: 'group-editor-count' })
       ]));
       editor.appendChild(textarea);
       editor.appendChild(el('div', { className: 'row' }, [
-        el('div', { className: 'hint', text: '直接编辑 Markdown；保存后机器人下次被 @ 时生效（容量上限见配置）。' }),
-        btn('保存笔记', 'primary sm', function () { saveGroupNote(editingGroupFile, textarea.value); }),
+        el('div', { className: 'hint', text: readOnly ? '旧笔记仅供核对。请在上方对话记忆中纠正或忘记，避免两份内容互相覆盖。' : '直接编辑 Markdown；保存后机器人下次被 @ 时生效（容量上限见配置）。' }),
+        readOnly ? null : btn('保存笔记', 'primary sm', function () { saveGroupNote(file, textarea.value); }),
         btn('关闭', 'quiet sm', function () { editingGroupFile = ''; renderGroups(); })
       ]));
       host.appendChild(editor);
       var count = document.getElementById('group-editor-count');
       var refresh = function () { if (count) count.textContent = textarea.value.length + ' 字'; };
-      textarea.addEventListener('input', refresh);
+      textarea.addEventListener('input', function () { draft.text = textarea.value; draft.dirty = true; refresh(); });
+      refresh();
       // 注意：api(path) 才是 GET；传第二个参数会变成 POST（打开编辑器曾因此报「文件名不合法」）
-      api('/dsh-qq/api/groups/note?file=' + encodeURIComponent(editingGroupFile)).then(function (res) {
-        if (res.data && res.data.ok === true) { textarea.value = String(res.data.text ?? ''); refresh(); }
+      if (!draft.loaded) api('/dsh-qq/api/groups/note?file=' + encodeURIComponent(file)).then(function (res) {
+        if (res.data && res.data.ok === true) {
+          draft.loaded = true; draft.revision = res.data.revision;
+          if (!draft.dirty) { draft.text = String(res.data.text ?? ''); textarea.value = draft.text; }
+          refresh();
+        }
         else textarea.placeholder = (res.data && res.data.error) || '读取失败';
       }).catch(function (error) { textarea.placeholder = String(error.message || error); });
     }
@@ -1393,15 +1438,440 @@
   }
 
   function saveGroupNote(file, text) {
-    api('/dsh-qq/api/groups/note', { file: file, text: text }).then(function (res) {
+    var body = { file: file, text: text };
+    if (groupDrafts[file] && groupDrafts[file].revision != null) body.expectedRevision = groupDrafts[file].revision;
+    api('/dsh-qq/api/groups/note', body).then(function (res) {
       if (res.data && res.data.ok === true) {
         notice('群笔记已保存（' + (res.data.chars ?? text.length) + ' 字）');
-        editingGroupFile = '';
+        delete groupDrafts[file];
+        if (editingGroupFile === file) editingGroupFile = '';
         load();
       } else {
         notice((res.data && res.data.error) || '保存失败', 'bad');
       }
     }).catch(function (error) { notice(String(error.message || error), 'bad'); });
+  }
+
+
+  /* ---------- 对话记忆：草稿和异步请求只属于当前完整范围 ---------- */
+  var memorySelection = { chatKey: '', mode: 'chat' };
+  var memoryViews = {};
+
+  function memoryEntry() {
+    if (!memorySelection.chatKey) return null;
+    var key = JSON.stringify([memorySelection.chatKey, memorySelection.mode]);
+    return memoryViews[key] || (memoryViews[key] = { key: key, chatKey: memorySelection.chatKey, mode: memorySelection.mode,
+      query: '', memberId: '', kind: '', page: 1, limit: 20, data: null, loading: false, busy: false,
+      request: 0, error: '', message: '', draft: null, habitDraft: null, conflict: false, opened: {} });
+  }
+
+  function memoryCurrent(entry) {
+    return entry && memorySelection.chatKey === entry.chatKey && memorySelection.mode === entry.mode;
+  }
+
+  function memoryField(label, node) {
+    return el('div', { className: 'field' }, [el('label', { for: node.id, text: label }), node]);
+  }
+
+  function memoryKind(kind) {
+    return { fact: '事实', preference: '明确偏好', agreement: '约定', episode: '共同经历', legacy: '旧笔记' }[kind] || kind || '记忆';
+  }
+
+  function memorySubject(subject) {
+    return subject && subject.kind === 'member' ? '成员 ' + subject.id : '整个对话';
+  }
+
+  function memoryScopeText(entry) {
+    var label = promptLabel(entry.chatKey);
+    return label.kind + ' · ' + label.label + ' · ' + (entry.mode === 'work' ? '工作模式' : '聊天模式');
+  }
+
+  function renderConversationMemory() {
+    var host = document.getElementById('conversation-memory');
+    if (!host || !S) return;
+    if (S.memory && S.memory.available === false) { host.textContent = '当前运行环境未提供对话记忆服务。旧群笔记仍可在下方管理。'; return; }
+    var keys = Array.from(new Set((S.chatKeys || []).concat(Object.keys(S.prompt && S.prompt.chats || {}), Object.keys(S.preferences && S.preferences.chats || {}))));
+    if (memorySelection.chatKey && keys.indexOf(memorySelection.chatKey) < 0) keys.push(memorySelection.chatKey);
+    if (!memorySelection.chatKey && keys.length) memorySelection.chatKey = keys[0];
+    var mounted = !document.getElementById('memory-chat');
+    if (mounted) {
+      host.textContent = '';
+      var chat = el('select', { id: 'memory-chat', name: 'memory-chat', 'aria-label': '记忆所属对话' });
+      var mode = el('select', { id: 'memory-mode', name: 'memory-mode', 'aria-label': '记忆所属模式' }, [
+        el('option', { value: 'chat', text: '聊天模式' }), el('option', { value: 'work', text: '工作模式' })]);
+      function choose() {
+        memorySelection.chatKey = chat.value; memorySelection.mode = mode.value;
+        var entry = memoryEntry(); renderMemoryBody(entry);
+        if (entry) fetchMemory(entry, true);
+      }
+      chat.addEventListener('change', choose); mode.addEventListener('change', choose);
+      var cf = memoryField('对话', chat); cf.className += ' memory-scope';
+      var reload = btn('刷新记忆', 'quiet sm', function () { var entry = memoryEntry(); if (entry) fetchMemory(entry, true); });
+      reload.id = 'memory-refresh';
+      var download = btn('导出兼容笔记', 'quiet sm', function () { exportMemory(memoryEntry()); }, true);
+      download.id = 'memory-export';
+      download.title = '下载当前有效事实的 Markdown，供需要回退时使用；不会改写旧笔记文件。';
+      host.appendChild(el('div', { className: 'memory-toolbar' }, [cf, memoryField('模式', mode), reload, download]));
+      host.appendChild(el('p', { className: 'hint', text: '记忆只用于所选对话和模式；聊天习惯与临时情绪还按人设区分，不会改写共享人设。' }));
+      host.appendChild(el('div', { id: 'memory-status', className: 'memory-status', role: 'status', 'aria-live': 'polite' }));
+      host.appendChild(el('div', { id: 'memory-body' }));
+    }
+    var chatSelect = document.getElementById('memory-chat');
+    var signature = JSON.stringify(keys);
+    if (chatSelect._choices !== signature) {
+      chatSelect.textContent = '';
+      if (!keys.length) chatSelect.appendChild(el('option', { value: '', text: '还没有可管理的对话' }));
+      keys.forEach(function (key) { var p = promptLabel(key); chatSelect.appendChild(el('option', { value: key, text: p.kind + ' · ' + p.label })); });
+      chatSelect._choices = signature;
+    }
+    chatSelect.value = memorySelection.chatKey;
+    document.getElementById('memory-mode').value = memorySelection.mode;
+    var entry = memoryEntry();
+    if (!entry) { renderMemoryBody(null); return; }
+    if (mounted || (!entry.data && !entry.loading)) renderMemoryBody(entry);
+    if (!entry.loading && !entry.busy) fetchMemory(entry, false);
+  }
+
+  function fetchMemory(entry, explicit) {
+    if (!entry || entry.busy || (entry.loading && !explicit)) return Promise.resolve();
+    var request = ++entry.request;
+    entry.loading = true;
+    if (explicit) entry.error = '';
+    renderMemoryStatus(entry);
+    var path = '/dsh-qq/api/memory?chatKey=' + encodeURIComponent(entry.chatKey) + '&mode=' + entry.mode
+      + '&page=' + entry.page + '&limit=' + entry.limit + '&query=' + encodeURIComponent(entry.query)
+      + '&memberId=' + encodeURIComponent(entry.memberId) + (entry.kind ? '&kind=' + encodeURIComponent(entry.kind) : '');
+    return api(path).then(function (res) {
+      if (entry.request !== request) return;
+      if (!res.data || res.data.ok !== true) throw new Error((res.data && res.data.error) || (res.status === 404 ? '当前运行版本尚未提供对话记忆，请更新或重载插件。' : '记忆读取失败，请重试。'));
+      entry.data = res.data; entry.page = res.data.page || entry.page;
+      if (!entry.conflict) entry.error = '';
+      if (memoryCurrent(entry)) {
+        var host = document.getElementById('memory-body');
+        var focused = document.activeElement && host && host.contains(document.activeElement);
+        if (!entry.draft && !entry.habitDraft && (explicit || !focused)) renderMemoryBody(entry);
+      }
+    }).catch(function (error) { if (entry.request === request) entry.error = String(error.message || error); })
+      .finally(function () { if (entry.request === request) { entry.loading = false; renderMemoryStatus(entry); } });
+  }
+
+  function renderMemoryStatus(entry) {
+    if (!memoryCurrent(entry)) return;
+    var download = document.getElementById('memory-export');
+    if (download) download.disabled = !entry.data || entry.mode !== 'chat' || entry.busy || Boolean(entry.data.readOnly);
+    var host = document.getElementById('memory-status');
+    if (!host) return;
+    host.className = 'memory-status' + (entry.error ? ' bad' : '');
+    host.textContent = entry.busy ? (entry.exporting ? '正在导出兼容笔记…' : '正在保存…') : entry.error || (entry.loading ? (entry.data ? '正在刷新记忆…' : '正在读取记忆…') : entry.message || '');
+    if (entry.error && !entry.busy) host.appendChild(btn(entry.conflict ? '核对最新内容' : '重试读取', 'quiet sm', function () {
+      fetchMemory(entry, true).then(function () {
+        if (!memoryCurrent(entry) || !entry.conflict || !entry.data) return;
+        var draft = entry.draft || entry.habitDraft;
+        if (!draft) { entry.conflict = false; entry.error = ''; renderMemoryBody(entry); renderMemoryStatus(entry); return; }
+        var rows = entry.draft ? entry.data.items || [] : entry.data.habits || [];
+        var latest = rows.find(function (item) { return item.id === draft.id; });
+        var box = document.getElementById('memory-conflict');
+        if (!box) return;
+        box.textContent = '';
+        if (draft.personaIdentity !== entry.data.personaIdentity) {
+          box.appendChild(el('p', { text: '绑定人设已变化，草稿仍保留。请切回原人设后重试，或取消编辑后重新开始，避免写入另一个角色。' }));
+          return;
+        }
+        box.appendChild(el('p', { text: latest ? '当前已保存：' + (latest.text || latest.value || '') : '当前列表中已找不到这条内容，请核对筛选或取消编辑。' }));
+        if (latest || draft.action === 'create' || draft.action === 'relearn' || !draft.id) box.appendChild(btn('已核对，保留草稿继续编辑', 'quiet sm', function () {
+          draft.expectedRevision = entry.data.revision;
+          entry.conflict = false; entry.error = ''; box.textContent = ''; renderMemoryStatus(entry);
+        }));
+      });
+    }));
+  }
+
+  function exportMemory(entry) {
+    if (!entry || !entry.data || entry.busy || entry.mode !== 'chat' || entry.data.readOnly) return Promise.resolve(false);
+    entry.busy = true; entry.exporting = true; entry.error = ''; entry.message = ''; entry.request++; entry.loading = false;
+    memoryBusy(entry, true); renderMemoryStatus(entry);
+    return api('/dsh-qq/api/memory', { action: 'export', chatKey: entry.chatKey, mode: entry.mode,
+      personaIdentity: entry.data.personaIdentity, expectedRevision: entry.data.revision }).then(function (res) {
+      if (!res.data || res.data.ok !== true || typeof res.data.text !== 'string') throw new Error((res.data && res.data.error) || '导出失败，请刷新后重试。');
+      var url = URL.createObjectURL(new Blob([res.data.text], { type: 'text/markdown;charset=utf-8' }));
+      var link = el('a', { href: url, download: String(res.data.file || 'conversation-memory.md').split(/[\\/]/).pop() });
+      try { link.click(); } finally { setTimeout(function () { URL.revokeObjectURL(url); }, 1000); }
+      entry.message = '已下载兼容笔记，仅含当前有效事实；未改写旧笔记文件。';
+      return true;
+    }).catch(function (error) { entry.error = String(error.message || error); return false; })
+      .finally(function () { entry.busy = false; entry.exporting = false; memoryBusy(entry, false); renderMemoryStatus(entry); });
+  }
+
+  function memoryBusy(entry, busy) {
+    if (!memoryCurrent(entry)) return;
+    var host = document.getElementById('memory-body');
+    if (!host) return;
+    host.setAttribute('aria-busy', busy ? 'true' : 'false');
+    host.querySelectorAll('button, input, select, textarea').forEach(function (node) {
+      if (busy) { node._memoryDisabled = node.disabled; node.disabled = true; }
+      else if (node._memoryDisabled !== undefined) { node.disabled = node._memoryDisabled; delete node._memoryDisabled; }
+    });
+  }
+
+  function memoryPost(entry, endpoint, payload, success, draft) {
+    if (entry.busy || !entry.data) return Promise.resolve(false);
+    var body = Object.assign({ chatKey: entry.chatKey, mode: entry.mode, personaIdentity: draft ? draft.personaIdentity : entry.data.personaIdentity,
+      expectedRevision: draft ? draft.expectedRevision : entry.data.revision }, payload);
+    entry.busy = true; entry.error = ''; entry.message = ''; entry.request++; entry.loading = false;
+    memoryBusy(entry, true); renderMemoryStatus(entry);
+    return api('/dsh-qq/api/' + endpoint, body).then(function (res) {
+      if (!res.data || res.data.ok !== true) {
+        entry.conflict = res.status === 409 || (res.data && res.data.code === 'CONFLICT');
+        throw new Error((res.data && res.data.error) || (entry.conflict ? '内容已更新，请核对最新内容。草稿仍保留。' : '保存失败，请重试。'));
+      }
+      if (draft && entry.draft === draft) entry.draft = null;
+      if (draft && entry.habitDraft === draft) entry.habitDraft = null;
+      if (payload.action === 'forget' && entry.draft && entry.draft.id === payload.id) entry.draft = null;
+      if (payload.action === 'clear') { entry.draft = null; entry.habitDraft = null; }
+      if (Array.isArray(res.data.items)) entry.data = res.data;
+      entry.conflict = false; entry.message = res.data.message || success;
+      entry.busy = false; memoryBusy(entry, false);
+      return fetchMemory(entry, true).then(function () { if (memoryCurrent(entry)) renderMemoryBody(entry); return true; });
+    }).catch(function (error) { entry.error = String(error.message || error); return false; })
+      .finally(function () { entry.busy = false; memoryBusy(entry, false); renderMemoryStatus(entry); });
+  }
+
+  function startMemoryEdit(entry, item, action) {
+    if (entry.draft || entry.habitDraft) { entry.error = '请先保存或取消当前编辑，草稿仍保留。'; renderMemoryStatus(entry); return; }
+    var row = item || {};
+    entry.draft = { action: action || (item ? 'correct' : 'create'), id: row.id || '', text: action === 'relearn' ? '' : row.text || '',
+      kind: row.kind === 'legacy' ? 'fact' : row.kind || 'fact', key: row.key || '', subjectId: row.subject && row.subject.kind === 'member' ? row.subject.id : '',
+      personaScoped: Boolean(row.personaIdentity), personaIdentity: entry.data.personaIdentity,
+      expectedRevision: entry.data.revision, tombstoneId: action === 'relearn' ? row.id : '' };
+    entry.error = ''; renderMemoryBody(entry);
+    var input = document.getElementById('memory-edit-text'); if (input) input.focus();
+  }
+
+  function memoryEditor(entry) {
+    var draft = entry.draft;
+    var box = el('div', { className: 'group-editor memory-editor', id: 'memory-editor' });
+    box.appendChild(el('h3', { text: { create: '新增记忆', correct: '纠正这条记忆', relearn: '重新记住' }[draft.action] }));
+    var text = el('textarea', { id: 'memory-edit-text', name: 'memory-text', 'aria-label': '记忆内容', maxlength: 240, placeholder: '写清楚是谁、什么事，例如：小林不吃香菜…' });
+    text.value = draft.text; text.addEventListener('input', function () { draft.text = text.value; });
+    var kind = el('select', { id: 'memory-edit-kind', name: 'memory-kind', 'aria-label': '记忆类型' });
+    ['fact', 'preference', 'agreement', 'episode'].forEach(function (value) { kind.appendChild(el('option', { value: value, text: memoryKind(value) })); });
+    kind.value = draft.kind;
+    kind.addEventListener('change', function () {
+      draft.kind = kind.value;
+      if (kind.value === 'episode') draft.personaScoped = true;
+      scoped.checked = draft.personaScoped; scoped.disabled = kind.value === 'episode';
+    });
+    var subject = el('input', { id: 'memory-edit-subject', name: 'memory-subject', type: 'text', autocomplete: 'off', 'aria-label': '记忆对象的成员账号', placeholder: '留空表示整个对话…' });
+    subject.value = draft.subjectId; subject.addEventListener('input', function () { draft.subjectId = subject.value.trim(); });
+    var key = el('input', { id: 'memory-edit-key', name: 'memory-key', type: 'text', autocomplete: 'off', maxlength: 80, 'aria-label': '记忆主题', placeholder: '例如 饮食偏好…' });
+    key.value = draft.key; key.addEventListener('input', function () { draft.key = key.value.trim(); });
+    var scoped = el('input', { id: 'memory-edit-scoped', type: 'checkbox', checked: draft.personaScoped });
+    scoped.addEventListener('change', function () { draft.personaScoped = scoped.checked; });
+    if (draft.action === 'correct') { kind.disabled = true; subject.disabled = true; scoped.disabled = true; }
+    else scoped.disabled = draft.kind === 'episode';
+    box.appendChild(memoryField('内容 · 最多 240 字', text));
+    if (draft.action !== 'relearn') {
+      box.appendChild(el('div', { className: 'memory-toolbar' }, [memoryField('类型', kind), memoryField('对象成员账号', subject)]));
+      box.appendChild(memoryField('主题（可留空）', key));
+      box.appendChild(el('label', { className: 'memory-toggle', for: scoped.id }, [scoped, el('span', { text: '这是当前角色的经历或承诺，仅此角色使用' })]));
+    } else box.appendChild(el('p', { className: 'hint', text: '旧正文已删除。请重新输入明确内容；保存只解除这条记录的遗忘阻断。' }));
+    box.appendChild(el('div', { id: 'memory-conflict', className: 'hint' }));
+    box.appendChild(el('div', { className: 'actions' }, [
+      btn('保存记忆', 'primary sm', function () {
+        if (!draft.text.trim() || draft.text.length > 240) { entry.error = '请填写 1–240 字的记忆内容。'; renderMemoryStatus(entry); text.focus(); return; }
+        if (entry.conflict) { renderMemoryStatus(entry); return; }
+        var payload = { action: draft.action, text: draft.text.trim(), kind: draft.kind, subjectId: draft.subjectId };
+        if (draft.action === 'relearn') payload.tombstoneId = draft.tombstoneId;
+        else { if (draft.id) payload.id = draft.id; if (draft.key) payload.key = draft.key; payload.personaScoped = draft.personaScoped; }
+        memoryPost(entry, 'memory', payload, draft.action === 'relearn' ? '已重新记住' : '记忆已保存', draft);
+      }),
+      btn('取消编辑', 'quiet sm', function () { entry.draft = null; entry.conflict = false; entry.error = ''; renderMemoryBody(entry); renderMemoryStatus(entry); })
+    ]));
+    return box;
+  }
+
+  function memoryEvidence(entry, id, evidence) {
+    var box = el('details');
+    box.open = Boolean(entry.opened[id]);
+    box.appendChild(el('summary', { text: '查看来源依据（' + (evidence || []).length + '）' }));
+    var list = el('ul');
+    (evidence || []).slice(0, 8).forEach(function (item) { list.appendChild(el('li', { text:
+      (item.senderId ? '成员 ' + item.senderId + ' · ' : '') + fmtTime(item.receivedAt || item.at) + (item.quotedAuthorId ? ' · 引用成员 ' + item.quotedAuthorId : '') + (item.excerpt ? '：' + item.excerpt : '') })); });
+    box.appendChild(list);
+    if (!list.children.length) box.appendChild(el('p', { text: '人工录入或旧笔记，没有可核对的原始消息。' }));
+    box.addEventListener('toggle', function () { entry.opened[id] = box.open; });
+    return box;
+  }
+
+  function renderMemoryBody(entry) {
+    var host = document.getElementById('memory-body');
+    if (!host || (entry && !memoryCurrent(entry))) return;
+    host.textContent = '';
+    if (!entry) { host.appendChild(el('div', { className: 'memory-empty', text: '先接入一个对话，再在这里查看和管理记忆。' })); return; }
+    if (!entry.data) { host.appendChild(el('div', { className: 'memory-empty', text: entry.error ? '暂时无法读取记忆，可重试；旧笔记仍在下方。' : '正在读取所选对话…' })); return; }
+    var data = entry.data;
+    if (entry.mode === 'work' || data.legacy || data.readOnly) {
+      var work = entry.mode === 'work';
+      var warning = data.migration && data.migration.warning;
+      host.appendChild(el('p', { className: 'memory-status', text: work
+        ? '工作模式继续使用下方旧群笔记；切换到聊天模式管理新记忆。工作模式不会自动成长或使用情绪。'
+        : warning || '当前聊天记忆暂为只读，旧笔记保留供核对。暂不自动学习或使用情绪，请恢复记忆服务后刷新。' }));
+      (data.items || []).forEach(function (item) { host.appendChild(el('article', { className: 'memory-row' }, [el('p', { text: item.text || '' })])); });
+      if (!(data.items || []).length) host.appendChild(el('p', { className: 'memory-empty', text: work ? '这个工作对话还没有旧群笔记。' : '这个聊天对话暂无可读取的旧笔记。' }));
+      return;
+    }
+    var list = el('section', { 'aria-label': '记忆记录' });
+    var query = el('input', { id: 'memory-query', name: 'memory-query', type: 'search', autocomplete: 'off', 'aria-label': '搜索记忆', placeholder: '搜索记忆内容…' });
+    query.value = entry.query; query.addEventListener('input', function () { entry.query = query.value; });
+    var member = el('input', { id: 'memory-member', name: 'memory-member', type: 'text', autocomplete: 'off', 'aria-label': '按成员账号筛选', placeholder: '全部成员…' });
+    member.value = entry.memberId; member.addEventListener('input', function () { entry.memberId = member.value.trim(); });
+    var kind = el('select', { id: 'memory-kind', name: 'memory-kind', 'aria-label': '按记忆类型筛选' }, [el('option', { value: '', text: '全部类型' })]);
+    ['fact', 'preference', 'agreement', 'episode', 'legacy'].forEach(function (value) { kind.appendChild(el('option', { value: value, text: memoryKind(value) })); });
+    kind.value = entry.kind; kind.addEventListener('change', function () { entry.kind = kind.value; entry.page = 1; fetchMemory(entry, true); });
+    var filters = el('form', { className: 'memory-toolbar', 'aria-label': '记忆筛选' });
+    var qf = memoryField('关键词', query); qf.className += ' memory-scope';
+    var mf = memoryField('成员账号', member); mf.className += ' memory-filter';
+    var kf = memoryField('类型', kind); kf.className += ' memory-filter';
+    [qf, mf, kf].forEach(function (node) { filters.appendChild(node); });
+    filters.appendChild(el('button', { type: 'submit', className: 'btn sm', text: '筛选记忆' }));
+    filters.addEventListener('submit', function (event) { event.preventDefault(); entry.page = 1; fetchMemory(entry, true); });
+    list.appendChild(filters);
+    list.appendChild(el('div', { className: 'memory-heading' }, [el('h3', { text: '记忆记录 · ' + Number(data.total || 0) + ' 条' }),
+      btn('新增记忆', 'sm', function () { startMemoryEdit(entry); })]));
+    if (entry.draft) list.appendChild(memoryEditor(entry));
+    var items = Array.isArray(data.items) ? data.items : [];
+    if (!items.length) list.appendChild(el('p', { className: 'memory-empty', text: entry.query || entry.memberId || entry.kind ? '没有符合筛选的记忆，试试调整关键词或类型。' : '还没有记忆。可以手动添加，也可以启用自动学习后从真实聊天中积累。' }));
+    items.forEach(function (item) {
+      var row = el('article', { className: 'memory-row', 'data-memory-id': item.id });
+      var state = { confirmed: '已确认', uncertain: '待核对', superseded: '已被更正' }[item.status] || '';
+      var source = { explicit: '本人明确表达', inferred: '自动提炼', manual: '人工录入', legacy: '旧笔记' }[item.sourceKind] || '';
+      row.appendChild(el('div', { className: 'memory-meta', text: memoryKind(item.kind) + ' · ' + memorySubject(item.subject) + (item.personaIdentity ? ' · 当前角色专属' : '') + (item.pinned ? ' · 已置顶' : '') }));
+      row.appendChild(el('p', { text: item.text || '' }));
+      row.appendChild(el('div', { className: 'memory-meta', text: [source, state, '更新于 ' + fmtTime(item.updatedAt)].filter(Boolean).join(' · ') }));
+      row.appendChild(memoryEvidence(entry, 'memory-' + item.id, item.evidence));
+      row.appendChild(el('div', { className: 'actions' }, [
+        btn('纠正', 'quiet sm', function () { startMemoryEdit(entry, item); }),
+        btn(item.pinned ? '取消置顶' : '置顶', 'quiet sm', function () { memoryPost(entry, 'memory', { action: 'pin', id: item.id, pinned: !item.pinned }, item.pinned ? '已取消置顶' : '已置顶'); }),
+        btn('忘记', 'quiet sm', function () {
+          if (!window.confirm('忘记「' + item.text + '」？\n处理 ' + memoryScopeText(entry) + ' 中这条记忆及其派生内容。会停止当前回复并取消本对话未完成消息，需要时请重新发送。后续聊天将重建干净上下文；不影响其他对话，也不会删除 QQ 原消息和宿主历史归档。')) return;
+          memoryPost(entry, 'memory', { action: 'forget', id: item.id }, '已忘记这条记忆');
+        })
+      ]));
+      list.appendChild(row);
+    });
+    var pages = Math.max(1, Math.ceil(Number(data.total || 0) / (data.limit || entry.limit)));
+    list.appendChild(el('div', { className: 'sticker-pager' }, [el('span', { className: 'hint', text: '第 ' + entry.page + ' / ' + pages + ' 页 · 每页 ' + (data.limit || entry.limit) + ' 条' }),
+      btn('上一页', 'quiet sm', function () { entry.page--; fetchMemory(entry, true); }, entry.page <= 1),
+      btn('下一页', 'quiet sm', function () { entry.page++; fetchMemory(entry, true); }, entry.page >= pages)]));
+    var forgotten = el('details', { className: 'memory-section' });
+    forgotten.open = Boolean(entry.opened.forgotten);
+    forgotten.addEventListener('toggle', function () { entry.opened.forgotten = forgotten.open; });
+    forgotten.appendChild(el('summary', { text: '已忘记的记录（' + (data.tombstones || []).length + '）' }));
+    forgotten.appendChild(el('p', { className: 'hint', text: '只保留主题、对象和时间，旧正文已删除。重新记住需要你明确填写新内容。' }));
+    (data.tombstones || []).forEach(function (item) { forgotten.appendChild(el('div', { className: 'memory-row' }, [
+      el('p', { text: (item.key || '未命名主题') + ' · ' + memorySubject(item.subject) + ' · ' + fmtTime(item.forgottenAt) }),
+      btn('重新记住', 'quiet sm', function () { startMemoryEdit(entry, item, 'relearn'); })])); });
+    list.appendChild(forgotten);
+    list.appendChild(btn('清除本对话全部记忆', 'quiet sm', function () {
+      if (!window.confirm('清除 ' + memoryScopeText(entry) + ' 的全部记忆？\n包含所有人设的角色经历，并移除失去依据的派生内容。会停止当前回复并取消本对话未完成消息，需要时请重新发送。不会清除无关的人工习惯、人设库、图库、QQ 原消息或其他对话。此操作不能撤销。')) return;
+      memoryPost(entry, 'memory', { action: 'clear', category: 'facts' }, '已清除当前对话和模式的全部记忆');
+    }));
+    var settings = renderMemoryGrowth(entry);
+    host.appendChild(el('div', { className: 'memory-layout' }, [list, settings]));
+    if (data.contextResetPending) host.insertBefore(el('p', { className: 'memory-status', text: '记忆已删除，聊天上下文待重建。下一次聊天不会继续使用旧上下文。' }), host.firstChild);
+    if (data.migration && data.migration.legacyChanged) host.insertBefore(el('p', { className: 'memory-status', text: '旧聊天笔记在首次导入后发生了变化，未再次自动覆盖。请在下方核对旧笔记，再在这里逐条新增或纠正。' }), host.firstChild);
+    renderMemoryStatus(entry);
+  }
+
+  function renderMemoryGrowth(entry) {
+    var data = entry.data;
+    var panel = el('aside', { className: 'memory-settings', 'aria-label': '学习习惯与情绪' });
+    panel.appendChild(el('p', { className: 'memory-meta', text: '当前人设：' + (data.personaName || data.personaIdentity || '未设置') }));
+    var section = el('section', { className: 'memory-section' }, [el('h3', { text: '自动学习' })]);
+    function toggle(label, checked, name) {
+      var input = el('input', { type: 'checkbox', id: 'memory-' + name, checked: checked });
+      input.disabled = entry.mode !== 'chat';
+      input.addEventListener('change', function () { var payload = { action: 'settings' }; payload[name] = input.checked; memoryPost(entry, 'growth', payload, '设置已更新'); });
+      return el('label', { className: 'memory-toggle', for: input.id }, [input, el('span', { text: label })]);
+    }
+    section.appendChild(toggle('启用长期学习', data.learning && data.learning.enabled === true, 'learningEnabled'));
+    var paused = data.learning && data.learning.paused === true;
+    section.appendChild(btn(paused ? '恢复长期学习' : '暂停长期学习', 'quiet sm', function () {
+      memoryPost(entry, 'growth', { action: 'settings', learningPaused: !paused }, paused ? '已恢复长期学习' : '已暂停长期学习');
+    }, entry.mode !== 'chat' || !data.learning || !data.learning.enabled));
+    section.appendChild(el('p', { className: 'hint', text: entry.mode !== 'chat' ? '工作模式不自动成长或使用聊天情绪。人工记忆管理仍可使用。' : '暂停只停止自动更新记忆和习惯。正常聊天、读取已有记忆、人工纠正和独立情绪开关不受影响。' }));
+    panel.appendChild(section);
+    var mood = data.mood;
+    var labels = { calm: '平静', happy: '开心', proud: '得意', confused: '困惑', sulky: '轻微闹别扭' };
+    var emotion = el('section', { className: 'memory-section' }, [el('h3', { text: '临时情绪' })]);
+    emotion.appendChild(toggle('启用临时情绪', data.emotion && data.emotion.enabled === true, 'emotionEnabled'));
+    var enabled = data.emotion && data.emotion.enabled === true;
+    var active = enabled && mood && (!mood.expiresAt || mood.expiresAt > Date.now());
+    emotion.appendChild(el('p', { text: !enabled ? '已关闭 · 不使用临时情绪' : active ? (labels[mood.label] || mood.label) + ' · 强度 ' + Number(mood.intensity || 0).toFixed(2) : '平静 · 暂无短期情绪' }));
+    if (active) {
+      emotion.appendChild(el('p', { className: 'hint', text: '对象：' + ([mood.targetMemberId ? '成员 ' + mood.targetMemberId : '', mood.topicKey ? '话题 ' + mood.topicKey : ''].filter(Boolean).join(' · ') || '未指定') }));
+      emotion.appendChild(el('p', { className: 'hint', text: '原因：' + (mood.reason || '没有可核对的事件摘要') }));
+      emotion.appendChild(el('p', { className: 'hint', text: '发生于 ' + fmtTime(mood.createdAt) + (mood.expiresAt ? ' · 最多约 ' + Math.max(1, Math.ceil((mood.expiresAt - Date.now()) / 60000)) + ' 分钟后恢复' : '') }));
+    }
+    emotion.appendChild(btn('恢复平静', 'quiet sm', function () { memoryPost(entry, 'growth', { action: 'resetMood' }, '已恢复平静；长期记忆和习惯保留'); }, !mood));
+    emotion.appendChild(el('p', { className: 'hint', text: '只影响当前对象的措辞与选图，不改变权限、发言额度或办事能力。' }));
+    panel.appendChild(emotion);
+    var habits = el('section', { className: 'memory-section' }, [el('h3', { text: '本对话的聊天习惯' })]);
+    var names = { length: '回答长短', order: '回答顺序', banter: '玩笑边界', address: '称呼', stickers: '表情倾向' };
+    function edit(item) {
+      if (entry.draft || entry.habitDraft) { entry.error = '请先保存或取消当前编辑，草稿仍保留。'; renderMemoryStatus(entry); return; }
+      entry.habitDraft = { id: item && item.id || '', dimension: item && item.dimension || 'length', value: item && item.value || '',
+        subjectId: item && item.subjectId || '', expectedRevision: data.revision, personaIdentity: data.personaIdentity };
+      renderMemoryBody(entry);
+    }
+    (data.habits || []).forEach(function (item) {
+      var row = el('article', { className: 'memory-row' }, [
+        el('div', { className: 'memory-meta', text: (names[item.dimension] || item.dimension) + ' · ' + (item.subjectId ? '成员 ' + item.subjectId : '整个对话') + (item.locked ? ' · 已锁定' : '') }),
+        el('p', { text: String(item.value || '') }), memoryEvidence(entry, 'habit-' + item.id, item.evidence),
+        el('div', { className: 'actions' }, [
+          btn('编辑习惯', 'quiet sm', function () { edit(item); }),
+          btn(item.locked ? '解锁' : '锁定', 'quiet sm', function () { memoryPost(entry, 'growth', { action: item.locked ? 'unlock' : 'lock', id: item.id }, item.locked ? '习惯已解锁' : '习惯已锁定，自动学习不会改写'); })
+        ])
+      ]); habits.appendChild(row);
+    });
+    if (!(data.habits || []).length) habits.appendChild(el('p', { className: 'hint', text: '尚未形成习惯。多次独立互动后才会逐渐积累，你也可以明确设置。' }));
+    if (entry.habitDraft) {
+      var draft = entry.habitDraft;
+      var editor = el('div', { className: 'group-editor memory-editor' });
+      var dimension = el('select', { id: 'habit-dimension', 'aria-label': '习惯类型' });
+      Object.keys(names).forEach(function (value) { dimension.appendChild(el('option', { value: value, text: names[value] })); });
+      dimension.value = draft.dimension; dimension.addEventListener('change', function () { draft.dimension = dimension.value; });
+      var value = el('textarea', { id: 'habit-value', name: 'habit-value', maxlength: 120, 'aria-label': '聊天习惯内容', placeholder: '例如：先直接回答，再轻松接一句…' });
+      value.value = draft.value; value.addEventListener('input', function () { draft.value = value.value; });
+      var subject = el('input', { type: 'text', id: 'habit-subject', autocomplete: 'off', 'aria-label': '习惯对象成员账号', placeholder: '留空表示整个对话…' });
+      subject.value = draft.subjectId; subject.addEventListener('input', function () { draft.subjectId = subject.value.trim(); });
+      editor.appendChild(memoryField('表达维度', dimension)); editor.appendChild(memoryField('习惯内容', value)); editor.appendChild(memoryField('对象成员账号', subject));
+      editor.appendChild(el('div', { id: 'memory-conflict', className: 'hint' }));
+      editor.appendChild(el('div', { className: 'actions' }, [
+        btn('保存习惯', 'primary sm', function () {
+          if (!draft.value.trim()) { entry.error = '请填写习惯内容。'; renderMemoryStatus(entry); value.focus(); return; }
+          if (entry.conflict) { renderMemoryStatus(entry); return; }
+          memoryPost(entry, 'growth', { action: 'editHabit', id: draft.id || undefined, dimension: draft.dimension, value: draft.value.trim(), subjectId: draft.subjectId }, '聊天习惯已保存', draft);
+        }),
+        btn('取消编辑', 'quiet sm', function () { entry.habitDraft = null; entry.conflict = false; entry.error = ''; renderMemoryBody(entry); renderMemoryStatus(entry); })
+      ])); habits.appendChild(editor);
+    } else habits.appendChild(btn('添加聊天习惯', 'quiet sm', function () { edit(null); }));
+    habits.appendChild(btn('重置当前人设的习惯', 'quiet sm', function () {
+      if (window.confirm('重置 ' + memoryScopeText(entry) + ' 中当前人设的习惯与角色关系？\n不会删除长期事实、人设卡或当前情绪，也不影响其他人设。')) memoryPost(entry, 'growth', { action: 'resetHabits' }, '已重置当前人设的习惯；事实与情绪保留');
+    }));
+    var member = el('input', { type: 'text', id: 'memory-reset-member', 'aria-label': '要清除关系的成员账号', autocomplete: 'off', placeholder: '填写成员账号…' });
+    var reset = el('details', { className: 'memory-section' }, [el('summary', { text: '清除某位成员的角色关系' }), memoryField('成员账号', member)]);
+    reset.appendChild(btn('清除成员关系', 'quiet sm', function () {
+      if (!member.value.trim()) { entry.error = '请先填写要清除关系的成员账号。'; renderMemoryStatus(entry); member.focus(); return; }
+      if (window.confirm('仅清除当前人设与成员 ' + member.value.trim() + ' 的角色关系？不会删除该成员的客观事实。')) memoryPost(entry, 'growth', { action: 'resetMember', memberId: member.value.trim() }, '已清除选中成员的角色关系');
+    }));
+    habits.appendChild(reset); panel.appendChild(habits);
+    var candidates = el('details', { className: 'memory-section' }, [el('summary', { text: '待核对的学习线索（' + (data.candidates || []).length + '）' })]);
+    candidates.open = Boolean(entry.opened.candidates); candidates.addEventListener('toggle', function () { entry.opened.candidates = candidates.open; });
+    candidates.appendChild(el('p', { className: 'hint', text: '这些内容尚未成立，不会当成确定事实或习惯使用。' }));
+    (data.candidates || []).forEach(function (item) { candidates.appendChild(el('p', { className: 'memory-meta', text: String(item.text || item.value || '待核对线索') })); });
+    panel.appendChild(candidates);
+    return panel;
   }
 
   /* ---------- 会话提示词（默认 + 按对话覆盖）---------- */
@@ -1676,7 +2146,7 @@
   }
 
   function personaTrialPanel() {
-    var trial = personaTrial || (personaTrial = { history: [], input: '', draftKey: '', busy: false, error: '', effective: null, model: null, chatKey: '', imageStickerId: '', image: null, imageUrl: '', reading: false, cases: null });
+    var trial = personaTrial || (personaTrial = { history: [], input: '', draftKey: '', busy: false, error: '', effective: null, model: null, chatKey: '', imageStickerId: '', image: null, imageUrl: '', reading: false, cases: null, includeMemory: false });
     var caseKey = 'dsh-qq.persona-trial-cases.v1';
     if (!trial.cases) {
       try {
@@ -1698,7 +2168,10 @@
     chat.appendChild(el('option', { value: '', text: '不选对话（仅预演人设）' }));
     (S.chatKeys || []).forEach(function (key) { chat.appendChild(el('option', { value: key, text: promptLabel(key).label })); });
     chat.value = trial.chatKey;
-    chat.addEventListener('change', function () { trial.chatKey = chat.value; });
+    chat.addEventListener('change', function () { trial.chatKey = chat.value; if (!trial.chatKey) trial.includeMemory = false; refresh(); });
+    var memory = el('input', { id: 'persona-trial-memory', type: 'checkbox', checked: trial.includeMemory });
+    memory.addEventListener('change', function () { trial.includeMemory = memory.checked; });
+    var memoryChoice = el('label', { className: 'memory-toggle', for: memory.id }, [memory, el('span', { text: '读取所选对话的记忆与状态（只读）' })]);
     var picture = el('select', { id: 'persona-trial-sticker', name: 'persona-trial-sticker', 'aria-label': '用精选表情作为输入' });
     var upload = el('input', { type: 'file', id: 'persona-trial-upload', name: 'persona-trial-upload', accept: 'image/png,image/jpeg,image/webp', className: 'trial-upload', 'aria-label': '上传试聊图片' });
     var imagePreview = el('div', { id: 'persona-trial-image' });
@@ -1732,12 +2205,17 @@
       if (trial.imageStickerId && !trial.chatKey) { trial.error = '先选择预演对话，以检查这张图库图片的使用范围。'; refresh(); chat.focus(); return; }
       var draft = { id: personaDraft.id, name: personaDraft.name, text: personaDraft.text, stickerIds: personaStickerIds(personaDraft), aliases: personaAliases(personaDraft.aliases), activity: personaDraft.activity || 'inherit' };
       if (!String(draft.text || '').trim()) { trial.error = '先填写人设内容，再试聊。'; refresh(); return; }
-      var key = JSON.stringify([draft, trial.chatKey]);
+      if (trial.includeMemory && !trial.chatKey) { trial.error = '先选择预演对话，才能读取其记忆。'; refresh(); chat.focus(); return; }
+      var key = JSON.stringify([draft, trial.chatKey, Boolean(trial.includeMemory)]);
       if (key !== trial.draftKey) trial.history = [];
       trial.draftKey = key;
       var history = trial.history.slice(-12).map(function (item) { return { role: item.role, content: item.content.slice(0, 1000) }; });
       var body = { mode: 'chat', draft: draft, message: message, history: history, previewActions: true };
       if (trial.chatKey) body.chatKey = trial.chatKey;
+      if (trial.includeMemory) {
+        body.memorySnapshot = { chatKey: trial.chatKey, mode: 'chat' };
+        if (personaEditing !== '@new' && draft.id) body.memorySnapshot.personaId = draft.id;
+      }
       if (trial.image) body.image = trial.image;
       else if (trial.imageStickerId) body.imageStickerId = trial.imageStickerId;
       var previous = trial.history.slice();
@@ -1748,13 +2226,14 @@
         var reply = res.data.reply || actions.filter(function (action) { return action.type === 'text'; }).map(function (action) { return action.text; }).join('\n') || '[图片预演]';
         trial.history = previous.concat([{ role: 'user', content: message || '[图片输入]', imageStickerId: body.imageStickerId, uploaded: Boolean(body.image) }, { role: 'assistant', content: reply, actions: actions, warnings: res.data.warnings || [] }]).slice(-12);
         trial.effective = res.data.effective; trial.model = res.data.model;
+        trial.memorySnapshot = res.data.memorySnapshot || null;
         trial.input = ''; removeUpload(); trial.imageStickerId = '';
       }).catch(function (error) { trial.error = String(error.message || error); }).finally(function () {
         trial.busy = false;
         if (personaTrial === trial) trial.redraw();
       });
     });
-    var clear = btn('清空试聊', 'quiet sm', function () { trial.history = []; trial.error = ''; trial.effective = null; trial.model = null; removeUpload(); trial.imageStickerId = ''; refresh(); });
+    var clear = btn('清空试聊', 'quiet sm', function () { trial.history = []; trial.error = ''; trial.effective = null; trial.model = null; trial.memorySnapshot = null; removeUpload(); trial.imageStickerId = ''; refresh(); });
     var cases = el('select', { id: 'persona-trial-cases', 'aria-label': '本地测试样例' });
     function storeCases(next) {
       try { localStorage.setItem(caseKey, JSON.stringify(next)); trial.cases = next; return true; }
@@ -1801,6 +2280,7 @@
       });
       var busy = trial.busy || trial.reading;
       [send, clear, input, chat, picture, upload, removeImage, saveCase, loadCase, deleteCase, cases].forEach(function (node) { node.disabled = busy; });
+      memory.checked = Boolean(trial.includeMemory); memory.disabled = busy || !trial.chatKey;
       input.value = trial.input;
       send.textContent = trial.busy ? '试聊中…' : '试聊';
       box.setAttribute('aria-busy', busy ? 'true' : 'false');
@@ -1824,11 +2304,21 @@
       cases.value = trial.cases.some(function (item) { return item.id === selected; }) ? selected : '';
       details.textContent = '';
       if (trial.effective) details.appendChild(el('details', { className: 'persona-effective' }, [el('summary', { text: '查看本次人设与聊天规则' }), personaEffectiveDetails(trial.effective, trial.model)]));
+      if (trial.memorySnapshot) {
+        var snapshot = trial.memorySnapshot;
+        var snapshotBox = el('details', { className: 'persona-effective' }, [el('summary', { text: '本次使用的只读记忆（' + (snapshot.recordIds || []).length + ' 条）' })]);
+        snapshotBox.appendChild(el('p', { text: promptLabel(snapshot.chatKey).label + ' · ' + (snapshot.mode === 'work' ? '工作模式' : '聊天模式') + ' · ' + (snapshot.personaIdentity || '仅客观事实') }));
+        snapshotBox.appendChild(el('p', { text: '引用条目：' + ((snapshot.recordIds || []).join('、') || '无') }));
+        snapshotBox.appendChild(el('pre', { text: snapshot.text || '本轮没有符合条件的记忆或状态。' }));
+        details.appendChild(snapshotBox);
+      }
     }
     trial.redraw = refresh;
     input.addEventListener('input', function () { trial.input = input.value; });
     box.appendChild(log);
     box.appendChild(el('div', { className: 'trial-controls' }, [el('div', { className: 'field' }, [el('label', { for: chat.id, text: '预演对话（检查图库权限）' }), chat]), el('div', { className: 'field' }, [el('label', { for: picture.id, text: '用精选表情作为输入' }), picture])]));
+    box.appendChild(memoryChoice);
+    box.appendChild(el('p', { className: 'hint', text: '默认不读记忆。勾选后由服务端读取所选范围；新角色草稿仅使用客观事实。预演不学习、不改习惯或情绪、不扣真实聊天与图库发送额度，但仍产生模型用量。' }));
     box.appendChild(el('div', { className: 'field' }, [el('label', { for: upload.id, text: '或上传图片 · PNG / JPG / WebP，最多 2 MiB' }), upload]));
     box.appendChild(imagePreview); box.appendChild(removeImage); box.appendChild(input);
     box.appendChild(el('div', { className: 'actions' }, [send, clear]));
@@ -2930,6 +3420,7 @@
     renderCredentials();
     renderIdentity();
     renderGroups();
+    renderConversationMemory();
     // 状态轮询（含已在途请求）不能替换打开的编辑器、草稿和光标。
     if (personaEditing === '') renderPrompts();
     renderStickers('poll');

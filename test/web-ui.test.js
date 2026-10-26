@@ -22,6 +22,9 @@ import { resolveConfig } from '../lib/config.js'
 import { createStore } from '../lib/store.js'
 import { PAGE_PATH, createWebUi } from '../lib/web-ui.js'
 import { createLogger } from './helpers/fake-ctx.js'
+import { createConversationState } from '../lib/conversation-state.js'
+import { createConversationMemory } from '../lib/conversation-memory.js'
+import { createGroupMemory } from '../lib/group-memory.js'
 
 /** 假 webServer：捕获注册的路由，并能给出 origin。 */
 function createFakeWebServer(origin = 'http://127.0.0.1:3080') {
@@ -241,9 +244,10 @@ async function setup(overrides = {}) {
     },
     writes: [],
   }
-  const webUi = createWebUi({ ctx, config, store, transport, control, napcat, alerts, groupMemory, stickers: overrides.stickers, stickerTagger: overrides.stickerTagger, diagnostics: overrides.diagnostics, logger })
+  const memory = overrides.memoryFactory?.({ dir, config, store }) ?? null
+  const webUi = createWebUi({ ctx, config, store, transport, control, napcat, alerts, groupMemory, memory, stickers: overrides.stickers, stickerTagger: overrides.stickerTagger, diagnostics: overrides.diagnostics, logger })
   transport.sentTestMessages = []
-  return { dir, config, store, webServer, configEditor, credentials, control, napcat, alerts, groupMemory, ctx, logger, transport, webUi }
+  return { dir, config, store, webServer, configEditor, credentials, control, napcat, alerts, groupMemory, memory, ctx, logger, transport, webUi }
 }
 
 test('注册：作为 webServer 的 prefix 路由挂到 /dsh-qq，url() 给出完整地址', async () => {
@@ -924,4 +928,48 @@ test('图文预演API：超过旧64KB的图片可入站，无真实发送且仍�
   assert.equal(env.transport.sentTestMessages.length, 0)
   const state = (await call(env.webUi, { url: '/dsh-qq/api/state' })).json().state
   assert.equal(state.diagnostics.recent[0].reason, '安静时段')
+})
+
+test('对话记忆API：真实存储、分页过滤、严格开关、冲突与写入保护', async t => {
+  const env = await setup({ memoryFactory: ({ dir, config, store }) => createConversationMemory({
+    state: createConversationState({ dir }), store, config, groupMemory: createGroupMemory({ dir, config }),
+  }) })
+  t.after(() => env.memory.dispose())
+  const chatKey = 'onebot:100:group:memory'
+  await env.store.setMode(chatKey, 'chat')
+  await env.store.setPersona('fish', { text: '基础鱼人设' })
+  await env.store.bindPersona(chatKey, 'fish', 'chat')
+  const get = extra => call(env.webUi, { url: `${PAGE_PATH}/api/memory?${new URLSearchParams({ chatKey, mode: 'chat', ...extra })}` })
+  const post = (path, body, headers = PANEL) => call(env.webUi, { method: 'POST', url: `${PAGE_PATH}/api/${path}`, headers, body: { chatKey, mode: 'chat', ...body } })
+  let view = (await get()).json()
+  const forbidden = await post('memory', { action: 'create', text: '不该写入', expectedRevision: view.revision }, {})
+  assert.equal(forbidden.code, 403)
+  const result = await post('memory', { action: 'create', kind: 'preference', key: 'food', subjectId: 'a', text: '不吃香菜', expectedRevision: view.revision })
+  assert.equal(result.code, 200, result.body)
+  const id = result.json().recordId
+  const stale = await post('memory', { action: 'correct', id, text: '错误覆盖', expectedRevision: view.revision })
+  assert.equal(stale.code, 409)
+  view = (await get({ kind: 'preference', memberId: 'a', query: '香菜' })).json()
+  assert.equal(view.total, 1)
+  assert.equal((await get({ memberId: 'b' })).json().total, 0)
+  assert.equal((await post('growth', { action: 'settings', learningEnabled: 'false', expectedRevision: view.revision })).code, 400)
+  assert.equal((await post('growth', { action: 'settings', learningEnabled: true, expectedRevision: view.revision })).code, 200)
+  view = (await get()).json()
+  const snapshot = await post('persona-preview', { memorySnapshot: { chatKey, mode: 'chat', personaId: 'fish' } })
+  assert.equal(snapshot.code, 200, snapshot.body)
+  assert.equal(snapshot.json().memorySnapshot.readOnly, true)
+  assert.equal((await get()).json().revision, view.revision)
+  const state = (await call(env.webUi, { url: `${PAGE_PATH}/api/state` })).json().state
+  assert.equal(state.memory.available, true)
+  assert.doesNotMatch(JSON.stringify(state.memory), /不吃香菜/)
+  const exported = await post('memory', { action: 'export', expectedRevision: view.revision })
+  assert.equal(exported.code, 200, exported.body)
+  assert.match(exported.json().text, /不吃香菜/)
+  view = (await get()).json()
+  assert.equal((await post('memory', { action: 'forget', id, expectedRevision: view.revision })).code, 200)
+  assert.equal((await get()).json().total, 0)
+  const emptyExport = await post('memory', { action: 'export', expectedRevision: (await get()).json().revision })
+  assert.equal(emptyExport.code, 200, emptyExport.body)
+  assert.doesNotMatch(emptyExport.json().text, /不吃香菜/)
+  assert.equal(env.transport.sentTestMessages.length, 0)
 })

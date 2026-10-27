@@ -352,14 +352,16 @@ test('会话提示词：默认/按对话覆盖/清除/长度上限/重启不丢'
   assert.equal(store.promptFor('onebot:1:group:2'), '你是群助手，回答简短。')
   assert.deepEqual(store.promptChats(), {})
 
-  await assert.rejects(() => store.setDefaultPrompt('x'.repeat(4001)), /太长/)
-  await assert.rejects(() => store.setChatPrompt('onebot:1:group:2', 'x'.repeat(4001)), /太长/)
+  await store.setDefaultPrompt('x'.repeat(5000))
+  await store.setChatPrompt('onebot:1:group:2', 'x'.repeat(5000))
+  await assert.rejects(() => store.setDefaultPrompt('x'.repeat(5001)), /太长/)
+  await assert.rejects(() => store.setChatPrompt('onebot:1:group:2', 'x'.repeat(5001)), /太长/)
   await assert.rejects(() => store.setChatPrompt('', 'x'), /不能为空/)
 
   await store.setChatPrompt('onebot:1:group:2', '持久化')
   const reloaded = createStore({ dir })
   await reloaded.load()
-  assert.equal(reloaded.defaultPrompt(), '你是群助手，回答简短。')
+  assert.equal(reloaded.defaultPrompt(), 'x'.repeat(5000))
   assert.equal(reloaded.promptFor('onebot:1:group:2'), '持久化')
 })
 
@@ -498,7 +500,8 @@ test('人设库：id/空文本/超长校验，非法数据在加载时被丢弃'
   await store.load()
   await assert.rejects(() => store.setPersona('Bad ID', { text: 'x' }), /人设 id/)
   await assert.rejects(() => store.setPersona('ok', { text: '   ' }), /不能为空/)
-  await assert.rejects(() => store.setPersona('ok', { text: 'x'.repeat(4001) }), /人设太长/)
+  await store.setPersona('ok', { text: 'x'.repeat(5000) })
+  await assert.rejects(() => store.setPersona('ok', { text: 'x'.repeat(5001) }), /人设太长/)
   await assert.rejects(() => store.setDefaultPersona('missing'), /人设不存在/)
 
   await writeFile(store.file, JSON.stringify({

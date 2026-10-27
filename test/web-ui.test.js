@@ -783,7 +783,7 @@ test('会话提示词：state 透传 + POST 保存默认/按对话 + 校验', as
 
   const state = (await call(env.webUi, { url: '/dsh-qq/api/state' })).json().state
   assert.equal(state.prompt.default, '默认人设')
-  assert.equal(state.promptLimit, 4000)
+  assert.equal(state.promptLimit, 5000)
   assert.ok(Array.isArray(state.chatKeys))
 
   const chat = await call(env.webUi, {
@@ -801,7 +801,9 @@ test('会话提示词：state 透传 + POST 保存默认/按对话 + 校验', as
 
   const badKey = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', headers: PANEL, body: { chatKey: 'not-a-chat-key', text: 'x' } })
   assert.equal(JSON.parse(badKey.body).ok, false, '非法 chatKey 必须拒绝')
-  const tooLong = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', headers: PANEL, body: { chatKey: '', text: 'x'.repeat(4001) } })
+  const acceptedLimit = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', headers: PANEL, body: { chatKey: '', text: 'x'.repeat(5000) } })
+  assert.equal(JSON.parse(acceptedLimit.body).ok, true, '5000 字应允许保存')
+  const tooLong = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', headers: PANEL, body: { chatKey: '', text: 'x'.repeat(5001) } })
   assert.equal(JSON.parse(tooLong.body).ok, false, '超长必须拒绝')
   const noHeader = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', body: { text: 'x' } })
   assert.equal(noHeader.code, 403, '写操作需要 CSRF 头')

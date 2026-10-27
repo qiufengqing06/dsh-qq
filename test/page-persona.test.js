@@ -68,7 +68,7 @@ function page(options = {}) {
   }
   const state = {
     personas: [{ id: '002', name: '测试角色', chars: 4 }],
-    prompt: { default: '', chats: {} }, modes: {}, chatKeys: [], promptLimit: 4000,
+        prompt: { default: '', chats: {} }, modes: {}, chatKeys: [], promptLimit: 5000,
     lines: [], status: {},
   }
   if (options.chatKey) { state.chatKeys = [options.chatKey]; state.modes[options.chatKey] = 'work' }

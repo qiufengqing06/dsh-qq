@@ -3,6 +3,12 @@
 本项目遵循「一个版本一条中文 commit」的发布习惯；从 0.7.6 起把面向用户的变更记在这里。
 更早的历史见 `git log`。
 
+## v0.7.68
+
+- 品牌改为「鱼书 Yushu」，页面标题/侧栏/页脚与 README 展示名同步；技术包名、插件 id、`/dsh-qq` 路由保持不变。
+- GitHub 仓库改为 `qiufengqing06/dsh-yushu`；README 安装地址、package repository/homepage/bugs 同步。
+- 旧仓库地址由 GitHub 自动重定向，已安装用户无需重装。
+
 ## v0.7.67
 
 - DSH 0.2.1-rc.2 → rc.4 兼容性审计通过：两套测试、真实 cordis 装配、双线路连接/会话恢复均正常，无需业务代码迁移。

@@ -1,6 +1,6 @@
-# dsh-qq
+# 鱼书 Yushu
 
-将 QQ 接入 DeepSeek Harness（DSH）：在私聊、群聊和 QQ 频道中与模型对话、收发附件、切换人设、管理会话和处理审批。同时包含 **官方 QQBot** 与 **个人 QQ / OneBot 11（如 NapCat）**，两条线路可单独或同时使用。
+鱼书把 QQ 接入 DeepSeek Harness（DSH）：在私聊、群聊和 QQ 频道中与模型对话、收发附件、切换人设、管理会话和处理审批。同时包含 **官方 QQBot** 与 **个人 QQ / OneBot 11（如 NapCat）**，两条线路可单独或同时使用。
 
 ## 功能
 
@@ -19,18 +19,18 @@
 
 ```bash
 # 从 GitHub 安装或更新
-dsh plugin --profile web add github:qiufengqing06/dsh-qq
+dsh plugin --profile web add github:qiufengqing06/dsh-yushu
 
 # 或从本地源码目录安装
-dsh plugin --profile web add /path/to/dsh-qq
+dsh plugin --profile web add /path/to/dsh-yushu
 
 # 卸载
 dsh plugin --profile web remove dsh-qq
 ```
 
-也可以在 DSH Web「插件」页填写 `github:qiufengqing06/dsh-qq` 安装。本项目不通过 npm 包名安装。
+也可以在 DSH Web「插件」页填写 `github:qiufengqing06/dsh-yushu` 安装。本项目不通过 npm 包名安装。
 
-安装或更新代码后，重新加载插件或重启 DSH，再刷新页面。打开侧边栏「QQ 控制台」，或访问 DSH Web 地址下的 `/dsh-qq`，例如 `http://127.0.0.1:3080/dsh-qq`。页面显示新版本号不代表旧后端代码已重新加载。
+安装或更新代码后，重新加载插件或重启 DSH，再刷新页面。打开侧边栏「鱼书 / QQ 控制台」，或访问 DSH Web 地址下的 `/dsh-qq`，例如 `http://127.0.0.1:3080/dsh-qq`。页面显示新版本号不代表旧后端代码已重新加载。
 
 ## 接入线路
 

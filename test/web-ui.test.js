@@ -270,7 +270,7 @@ test('页面：自包含 HTML（无外部资源），含线路卡/凭据/身份/
   const page = await call(env.webUi)
   assert.equal(page.code, 200)
   assert.match(page.headers['content-type'], /text\/html/)
-  for (const marker of ['dsh-qq 控制台', 'id="chains"', 'id="napcat"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库', '对话模式', '模式切换暂不可用', 'id="stickers"', '表情包', 'id="chat-control"', '聊天控制', 'id="relations"', '关系']) {
+  for (const marker of ['鱼书', 'QQ 通道控制台', 'id="chains"', 'id="napcat"', 'id="identity"', 'id="config"', 'x-dsh-qq-panel', 'geist-var.woff2', '最近问题', '人设库', '对话模式', '模式切换暂不可用', 'id="stickers"', '表情包', 'id="chat-control"', '聊天控制', 'id="relations"', '关系']) {
     assert.ok(page.body.includes(marker), `页面应包含 ${marker}`)
   }
   // 页面必须自包含：字体、脚本、样式都由插件自己提供。唯一允许的外部引用是 QQ 头像 CDN

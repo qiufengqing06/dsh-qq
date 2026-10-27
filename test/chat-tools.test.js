@@ -90,6 +90,7 @@ test('legacy host keeps a scoped guard without invoking a partial presentation A
   assert.equal(guard({ name: 'read' }), undefined)
   assert.match(guard({ name: 'bash' }), /bash/)
   assert.match(guard({ name: 'run_code' }), /run_code/)
+  assert.doesNotMatch(guard({ name: 'bash' }), /切换工作模式|工作模式/)
   dispose()
   dispose()
   assert.equal(released, 1)

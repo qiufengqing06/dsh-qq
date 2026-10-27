@@ -1487,7 +1487,7 @@ test('会话提示词：setup 注册动态 section，保存后下一回合立即
   assert.match(sections[1].text(), /聊天模式/)
   assert.match(sections[1].text(), /收到表情包.*直接接话/)
   assert.match(sections[1].text(), /当前或上文明确要求.*识图.*读字.*翻译/)
-  assert.doesNotMatch(sections[1].text(), /切到工作模式|切工作模式/)
+  assert.doesNotMatch(sections[1].text(), /切换工作模式|切到工作模式|切工作模式/)
   assert.equal(sections[1].interpolate, false)
 })
 

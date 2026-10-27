@@ -791,3 +791,17 @@ test('删除人设后同ID重建不能复活历史会话绑定', async () => {
   await reloaded.load()
   assert.equal(reloaded.sessionRestorable(key, 'old', { mode: 'chat', personaIdentity: 'fish' }), false)
 })
+
+test('promptMaxChars：按传入上限校验，降低配置不截断旧正文', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-prompt-limit-'))
+  const wide = createStore({ dir, maxPromptChars: 6000 })
+  await wide.load()
+  await wide.setPersona('wide', { text: 'x'.repeat(6000) })
+  assert.equal(wide.personaOf('wide').text.length, 6000)
+  await assert.rejects(() => wide.setPersona('too-long', { text: 'x'.repeat(6001) }), /6000/)
+
+  const narrow = createStore({ dir, maxPromptChars: 5000 })
+  await narrow.load()
+  assert.equal(narrow.personaOf('wide').text.length, 6000, '降低上限不应在读取时截断旧正文')
+  await assert.rejects(() => narrow.setPersona('wide', { text: 'x'.repeat(6000) }), /5000/)
+})

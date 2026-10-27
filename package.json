@@ -1,6 +1,6 @@
 {
   "name": "dsh-qq",
-  "version": "0.7.64",
+  "version": "0.7.65",
   "description": "QQ 渠道插件：官方 QQBot 与个人 QQ（OneBot 11/NapCat）双线路，QQ ↔ DSH 会话、人设、记忆、表情、远程控制与审批。",
   "type": "module",
   "main": "lib/index.js",

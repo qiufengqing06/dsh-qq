@@ -2345,7 +2345,7 @@
     });
     if (editingExisting) idInput.disabled = true;
     var nameInput = el('input', { type: 'text', id: 'persona-name', name: 'persona-name', 'aria-label': '人设名称', autocomplete: 'off', placeholder: '名称，例如 技术顾问', value: draft.name || '' });
-    var textarea = el('textarea', { id: 'persona-text', name: 'persona-text', 'aria-label': '人设内容', maxlength: S.promptLimit || 5000, placeholder: '人设文本（最多 5000 字）' });
+    var textarea = el('textarea', { id: 'persona-text', name: 'persona-text', 'aria-label': '人设内容', maxlength: S.promptLimit || 5000, placeholder: '人设文本（最多 ' + (S.promptLimit || 5000) + ' 字）' });
     textarea.value = draft.text || '';
     var aliases = el('input', { type: 'text', id: 'persona-aliases', name: 'persona-aliases', autocomplete: 'off', 'aria-label': '呼唤昵称', placeholder: '例如：鱼鱼，小鱼…', value: Array.isArray(draft.aliases) ? draft.aliases.join('，') : (draft.aliases || '') });
     var activity = activitySelect(draft.activity, '人设默认活跃档位');

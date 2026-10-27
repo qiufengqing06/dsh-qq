@@ -137,3 +137,10 @@ test('stickers.vision：默认 deepseek-flash、可关、校验字段', () => {
   assert.equal(off.stickers.vision.model, 'deepseek-pro')
   assert.throws(() => resolveConfig({ transport: 'mock', stickers: { vision: { unknown: 1 } } }), /stickers\.vision has unknown keys/)
 })
+
+test('promptMaxChars：默认 5000，可配置且校验范围', () => {
+  assert.equal(resolveConfig({ transport: 'mock' }).promptMaxChars, 5000)
+  assert.equal(resolveConfig({ transport: 'mock', promptMaxChars: 8000 }).promptMaxChars, 8000)
+  assert.throws(() => resolveConfig({ transport: 'mock', promptMaxChars: 99 }), /promptMaxChars/)
+  assert.throws(() => resolveConfig({ transport: 'mock', promptMaxChars: 100001 }), /promptMaxChars/)
+})

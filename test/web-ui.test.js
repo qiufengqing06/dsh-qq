@@ -181,7 +181,7 @@ async function setup(overrides = {}) {
     agentOptions: { provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'low' },
     ...overrides.config,
   })
-  const store = createStore({ dir })
+  const store = createStore({ dir, maxPromptChars: config.promptMaxChars })
   await store.load()
   const webServer = overrides.webServer === null ? null : createFakeWebServer()
   const configEditor = overrides.configEditor === null ? null : createFakeConfigEditor()
@@ -447,6 +447,17 @@ test('定时任务：state 列表 + 删除接口', async () => {
   const remove = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/schedules', headers: PANEL, body: { action: 'remove', id: 's1' } })
   assert.equal(remove.code, 200, remove.body)
   assert.equal(env.store.schedules().length, 0)
+})
+
+test('promptMaxChars：页面上限来自配置，不写死 5000', async () => {
+  const env = await setup({ config: { promptMaxChars: 6000 } })
+  const state = JSON.parse((await call(env.webUi, { url: '/dsh-qq/api/state' })).body).state
+  assert.equal(state.promptLimit, 6000)
+  assert.equal(state.config.promptMaxChars, 6000)
+  const accept = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', headers: PANEL, body: { chatKey: '', text: 'x'.repeat(6000) } })
+  assert.equal(JSON.parse(accept.body).ok, true)
+  const reject = await call(env.webUi, { method: 'POST', url: '/dsh-qq/api/prompts', headers: PANEL, body: { chatKey: '', text: 'x'.repeat(6001) } })
+  assert.equal(JSON.parse(reject.body).ok, false)
 })
 
 test('配置写入：需要 CSRF 头；白名单 + 保留未提交项；非法值不落盘', async () => {

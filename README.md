@@ -15,7 +15,7 @@
 
 ## 安装与更新
 
-需要 Node.js 22 或以上，以及已能正常使用模型的 DSH `web` profile。按需要准备 QQBot 应用，或已经安装并登录的 NapCat；**个人线路不需要 QQBot AppID**。
+需要 Node.js 22 或以上、DSH `0.2.1-rc.2` 至 `0.3.0` 之前的版本，以及已能正常使用模型的 DSH `web` profile。按需要准备 QQBot 应用，或已经安装并登录的 NapCat；**个人线路不需要 QQBot AppID**。
 
 ```bash
 # 从 GitHub 安装或更新

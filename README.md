@@ -32,7 +32,7 @@ dsh plugin --profile web remove dsh-qq
 
 也可以在 DSH Web「插件」页填写 `github:qiufengqing06/dsh-yushu` 安装。本项目不通过 npm 包名安装。
 
-安装或更新代码后，重新加载插件或重启 DSH，再刷新页面。打开 DSH「设置」→「鱼书」，或直接访问 DSH Web 地址下的 `/dsh-qq`，例如 `http://127.0.0.1:3080/dsh-qq`。页面显示新版本号不代表旧后端代码已重新加载。
+安装或更新代码后，重新加载插件或重启 DSH，再刷新页面。打开 DSH「设置」→「鱼书」，点「打开鱼书控制台」，或直接访问 DSH Web 地址下的 `/dsh-qq`，例如 `http://127.0.0.1:3080/dsh-qq`。页面显示新版本号不代表旧后端代码已重新加载。
 
 ## 接入线路
 

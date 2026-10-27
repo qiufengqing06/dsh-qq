@@ -18,6 +18,10 @@ function fakeReact() {
       type,
       props: { ...(props ?? {}), children: children.length === 0 ? undefined : children.length === 1 ? children[0] : children },
     }),
+    useState: initial => [initial, () => {}],
+    useEffect: () => {},
+    createPortal: node => node,
+    Fragment: Symbol('Fragment'),
   }
 }
 
@@ -58,10 +62,9 @@ test('鱼书：设置页分区替代侧栏按钮，内嵌 /dsh-qq', async () => 
   assert.equal(meta.label(), '鱼书')
   const tree = component({})
   assert.match(textOf(tree), /鱼书/)
-  assert.match(textOf(tree), /QQ 通道控制台/)
-  const iframe = find(tree, 'iframe')
-  assert.ok(iframe)
-  assert.equal(iframe.props.src, '/dsh-qq')
+  assert.match(textOf(tree), /点击后用独立弹窗打开/)
+  assert.equal(find(tree, 'iframe'), null, '设置分区本身不内嵌 iframe')
+  assert.equal(find(tree, 'button').props.title, '打开鱼书控制台')
   assert.equal(find(tree, 'a').props.href, '/dsh-qq')
   assert.doesNotMatch(JSON.stringify(tree), /QQ 控制台/)
 })

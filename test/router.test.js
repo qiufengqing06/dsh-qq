@@ -58,7 +58,7 @@ test('parseCommand / stripMention', () => {
 test('参与判断：wake=true 才进 bridge，命令仍不参与', async () => {
   const calls = []
   const participation = { evaluate: async ev => { calls.push(ev.text); return { wake: ev.text.includes('报错') } } }
-  const { router, transport, store } = await setup({}, { participation })
+  const { router, transport, store } = await setup({ participation: { enabled: true, mode: 'block', allowUnmentioned: true, quietHours: '00:00-00:00' } }, { participation })
   await store.setMode('mock:acct:group:g1', 'chat')
   const hit = transport.inject({
     target: { kind: 'group', groupId: 'g1' },
@@ -88,7 +88,7 @@ test('参与判断：wake=true 才进 bridge，命令仍不参与', async () => 
 })
 
 test('短补充准入：不重复要求@，仍检查聊天授权且不放开命令', async () => {
-  const env = await setup({ pairingPolicy: 'allowlist' })
+  const env = await setup({ pairingPolicy: 'allowlist', participation: { allowUnmentioned: true } })
   const chatKey = 'mock:mock:group:g1'
   await env.store.setMode(chatKey, 'chat')
   const delivered = []
@@ -106,7 +106,7 @@ test('短补充准入：不重复要求@，仍检查聊天授权且不放开命�
 })
 
 test('OneBot → router → participation：保留@别人，引用自己的短句能续聊', async () => {
-  const env = await setup({ participation: { enabled: true, mode: 'block', quietHours: '00:00-00:00' } })
+  const env = await setup({ participation: { enabled: true, mode: 'block', allowUnmentioned: true, quietHours: '00:00-00:00' } })
   const p = createParticipation({ config: env.config, store: env.store })
   const router = createRouter({ ...env, participation: p })
   const incoming = (message, senderId = '20', lookupReply = null) => normalizeOneBotEvent({
@@ -147,7 +147,7 @@ test('免@群：block筛选聊天消息，log/off与work保留旧行为；命令
 })
 
 test('参与续聊不绕过ACL，未授权群友不占冷却或续聊名额', async () => {
-  const env = await setup({ pairingPolicy: 'allowlist', participation: { enabled: true, mode: 'block', quietHours: '00:00-00:00' } })
+  const env = await setup({ pairingPolicy: 'allowlist', participation: { enabled: true, mode: 'block', allowUnmentioned: true, quietHours: '00:00-00:00' } })
   const p = createParticipation({ config: env.config, store: env.store })
   const router = createRouter({ ...env, participation: p })
   const denied = env.transport.inject({ target: { kind: 'group', groupId: 'g1' }, sender: { id: 'stranger' }, text: '这个报错怎么修呀', mentioned: false })
@@ -237,6 +237,33 @@ test('群消息未 @机器人 → 静默忽略', async () => {
   const result = await router.routeInbound(ev)
   assert.deepEqual(result, { handled: 'ignored', reason: 'not-mentioned' })
   assert.equal(agents.created.length, 0)
+})
+
+test('必须 @ 是硬规则：参与判断开启也不能绕过未 @ 群消息', async () => {
+  const env = await setup({ participation: { enabled: true, mode: 'block', quietHours: '00:00-00:00' } })
+  const p = createParticipation({ config: env.config, store: env.store })
+  const router = createRouter({ ...env, participation: p })
+  const input = env.transport.inject({
+    target: { kind: 'group', groupId: 'g1' },
+    sender: { id: 'owner-1', name: 'O' },
+    text: '这个报错怎么修呀',
+    mentioned: false,
+  })
+  await env.store.setMode(input.chatKey, 'chat')
+  assert.deepEqual(await router.routeInbound(input), { handled: 'ignored', reason: 'not-mentioned' })
+  assert.equal(env.agents.created.length, 0)
+
+  const loose = await setup({ participation: { enabled: true, mode: 'block', allowUnmentioned: true, quietHours: '00:00-00:00' } })
+  const looseP = createParticipation({ config: loose.config, store: loose.store })
+  const looseRouter = createRouter({ ...loose, participation: looseP })
+  const looseInput = loose.transport.inject({
+    target: { kind: 'group', groupId: 'g1' },
+    sender: { id: 'owner-1', name: 'O' },
+    text: '这个报错怎么修呀',
+    mentioned: false,
+  })
+  await loose.store.setMode(looseInput.chatKey, 'chat')
+  assert.equal((await looseRouter.routeInbound(looseInput)).handled, 'message')
 })
 
 test('群消息 @机器人（owner）→ 进入桥接', async () => {

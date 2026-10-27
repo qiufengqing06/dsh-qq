@@ -18,7 +18,7 @@ async function setup(t, { freeReply = true, quietHours = '00:00-00:00', failSend
   const dir = await mkdtemp(join(tmpdir(), 'dsh-qq-diagnostics-'))
   const clock = () => new Date(2026, 9, 26, 12).getTime()
   const config = resolveConfig({ transport: 'mock', autoConnect: false, dataDir: dir, pairingPolicy: 'open',
-    freeReplyGroups: freeReply ? ['g1'] : [], participation: { enabled: true, mode: 'block', quietHours } })
+    freeReplyGroups: freeReply ? ['g1'] : [], participation: { enabled: true, mode: 'block', allowUnmentioned: true, quietHours } })
   const store = createStore({ dir })
   await store.load()
   const transport = createMockTransport({ failSend })

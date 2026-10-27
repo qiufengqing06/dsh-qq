@@ -40,7 +40,7 @@ dsh plugin --profile web remove dsh-qq
 
 1. 按 [NapCat 官方文档](https://doc.napneko.icu/)安装并登录 QQ。本插件只提供 OneBot 客户端，不安装或分发 NapCat、QQ 客户端。
 2. 在 NapCat 网络配置中启用 **WebSocket 服务端（正向 WS）**，例如 `ws://127.0.0.1:3001`，消息格式使用 `array`，设置访问 token。
-3. 在 QQ 控制台的配置中启用个人 QQ 线路，在「配置 → 连接与群聊」填写同一 WebSocket 地址；在「登录与凭据 → 个人号 access_token」保存 token，凭据引用为 `ONEBOT_ACCESS_TOKEN`。
+3. 在鱼书的配置中启用个人 QQ 线路，在「配置 → 连接与群聊」填写同一 WebSocket 地址；在「登录与凭据 → 个人号 access_token」保存 token，凭据引用为 `ONEBOT_ACCESS_TOKEN`。
 4. 保存后检查连接状态；必要时点击「重新连接」或执行 `/qq-reconnect`。私聊直接发消息，群里先用 @ 测试。
 
 对应插件配置字段如下。修改已安装插件的配置即可，不要重复插入插件行：

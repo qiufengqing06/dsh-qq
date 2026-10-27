@@ -99,7 +99,7 @@ test('全图库补全翻过完整首页，已收藏有标签但缺描述的图�
       : [env.store.itemOf(env.id)]
   } }
   const tagger = createStickerTagger({ ctx: env.ctx, config: env.config, store: pagedStore })
-  assert.deepEqual(await tagger.tagPending(), { tagged: 1, tried: 1 })
+  assert.deepEqual(await tagger.tagPending(), { tagged: 1, tried: 1, stopped: false })
   assert.deepEqual(offsets, [0, 500])
   assert.equal(env.store.itemOf(env.id).desc, '收藏的角色截图')
   assert.ok(env.store.itemOf(env.id).tags.includes('我的收藏'))
@@ -139,4 +139,15 @@ test('视觉队列按图片去重并显示进度，异步结果不覆盖人工�
     assert.equal(progress.failed, action === 'edit' ? 1 : 2)
     assert.doesNotMatch(progress.lastError, /模型旧描述|人工新描述|missing-image/)
   })
+})
+
+test('视觉失败：快照保留可诊断错误，不写通用文案', async () => {
+  const env = await setup('{"kind":"sticker"}')
+  env.ctx.get = name => name === 'llm'
+    ? { stream: async function* () { throw new Error('quota exhausted: image daily limit') } }
+    : { saveImage: async () => ({ attachmentId: 'ref' }) }
+  assert.equal(await env.tagger.tag(env.id), false)
+  const snap = env.tagger.snapshot()
+  assert.equal(snap.failed, 1)
+  assert.match(snap.lastError, /quota exhausted/)
 })
